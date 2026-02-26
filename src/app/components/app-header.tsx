@@ -118,9 +118,8 @@ export function AppHeader({
                       
                         <Settings className="w-3.5 h-3.5 text-[#389C9A]" /> {userType === 'business' ? 'Business Settings' : 'Settings'}
                       </button>
-                      <Link  to="/login/portal" 
-               >
-               
+                      <Link  to="/ " 
+                       >   
                       <button
                         className="w-full text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest hover:bg-[#1D1D1D] hover:text-white text-red-500 flex items-center gap-3 transition-colors italic"
                       >
