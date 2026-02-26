@@ -50,7 +50,7 @@ export function Home() {
             <ArrowRight className="w-5 h-5 text-[#389C9A]" />
           </Link>
            <Link 
-            to="/become-business"  
+            to="/become-creator"  
             className="group flex items-center justify-between bg-[#1D1D1D] text-white p-6 font-black uppercase tracking-tight transition-all active:scale-[0.98] italic"
           >
             Become a Creator
@@ -58,7 +58,7 @@ export function Home() {
           </Link>
           
           <Link 
-            to="/become-creator" 
+            to="/become-business" 
             className="flex items-center justify-between border-2 border-[#1D1D1D] text-[#1D1D1D] p-6 font-black uppercase tracking-tight transition-all active:scale-[0.98] hover:bg-[#1D1D1D] hover:text-white italic"
           >
             Register Business
