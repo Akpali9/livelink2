@@ -36,12 +36,11 @@ export function Home() {
           Premium in-stream banner advertising for creators and growing businesses.
         </motion.p>
 
-        <motion.div 
+      <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="flex flex-col gap-4 w-full"
-        >
+          className="flex flex-col gap-4 w-full"  >
           <Link 
             to="/login/portal" 
             className="flex items-center justify-between border-2 border-[#1D1D1D] text-[#1D1D1D] p-6 font-black uppercase tracking-tight transition-all active:scale-[0.98] hover:bg-[#1D1D1D] hover:text-white italic"
@@ -76,6 +75,7 @@ export function Home() {
           </Link>
         </motion.div>
       </div>
+    
       <div className="px-8 pb-12">
         <div className="h-[1px] bg-[#1D1D1D]/10 mb-8" />
         <div className="grid grid-cols-3 gap-8">
