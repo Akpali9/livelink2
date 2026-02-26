@@ -184,7 +184,7 @@ export function BecomeBusiness() {
 
   return (
     <div className="flex flex-col min-h-screen bg-white pb-32 text-[#1D1D1D]">
-      <AppHeader showBack title="Business Registration" />
+     
       {/* Header */}
       <div className="px-8 pt-12 pb-8 border-b-2 border-[#1D1D1D]">
         <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest mb-6 opacity-40 italic">
