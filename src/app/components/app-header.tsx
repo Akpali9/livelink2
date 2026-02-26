@@ -122,6 +122,7 @@ export function AppHeader({
                >
                
                       <button 
+                          onClick={() => backPath ? navigate(backPath) : navigate(0)}
                         className="w-full text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest hover:bg-[#1D1D1D] hover:text-white text-red-500 flex items-center gap-3 transition-colors italic"
                       >
                         <LogOut className="w-3.5 h-3.5" /> Logout
