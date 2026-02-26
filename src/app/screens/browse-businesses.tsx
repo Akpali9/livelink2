@@ -249,7 +249,7 @@ export function BrowseBusinesses() {
 
   return (
     <div className="flex flex-col min-h-screen bg-[#FDFDFD] text-[#1D1D1D] font-sans overflow-x-hidden pb-[100px]">
-      <AppHeader showBack title="Browse Brands" />
+    
       <div className="px-5 py-6 sticky top-[84px] bg-[#FDFDFD]/95 backdrop-blur-md z-20">
         <div className="flex gap-3">
           <div className="relative flex-1">
