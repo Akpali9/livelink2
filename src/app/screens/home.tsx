@@ -76,7 +76,6 @@ export function Home() {
           </Link>
         </motion.div>
       </div>
-      {/* Trust Bar */}
       <div className="px-8 pb-12">
         <div className="h-[1px] bg-[#1D1D1D]/10 mb-8" />
         <div className="grid grid-cols-3 gap-8">
