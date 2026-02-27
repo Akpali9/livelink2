@@ -171,18 +171,18 @@ export function Dashboard() {
                 <ArrowUpRight className="w-4 h-4 text-white/40" />
               </button>
             </div>
-            <h2 className="text-4xl font-black tracking-tighter leading-none mb-8 text-center italic">£{user.totalEarned.toFixed(2)}</h2>
+            <h2 className="text-4xl font-black tracking-tighter leading-none mb-8 text-center italic">N{user.totalEarned.toFixed(2)}</h2>
             
             <div className="h-[1px] bg-white/10 mb-8" />
             
             <div className="grid grid-cols-2 gap-8 mb-8">
               <div className="flex flex-col gap-1">
                 <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">Pending</span>
-                <span className="text-xl font-bold text-[#FEDB71]">£{user.pending.toFixed(2)}</span>
+                <span className="text-xl font-bold text-[#FEDB71]">N{user.pending.toFixed(2)}</span>
               </div>
               <div className="flex flex-col gap-1 text-right">
                 <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">Paid Out</span>
-                <span className="text-xl font-bold text-[#389C9A]">£{user.paidOut.toFixed(2)}</span>
+                <span className="text-xl font-bold text-[#389C9A]">N{user.paidOut.toFixed(2)}</span>
               </div>
             </div>
 
@@ -260,7 +260,7 @@ export function Dashboard() {
                       </div>
                     </div>
                     <div className="flex flex-col items-end">
-                      <p className="text-2xl font-black italic leading-none mb-2 text-[#389C9A]">£{req.price}</p>
+                      <p className="text-2xl font-black italic leading-none mb-2 text-[#389C9A]">N{req.price}</p>
                       <div className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-none flex items-center gap-1.5 ${
                         req.daysLeft <= 1 ? "bg-red-100 text-red-600 border border-red-200" : 
                         req.daysLeft <= 2 ? "bg-orange-100 text-orange-600 border border-orange-200" : "bg-[#FEDB71]/10 text-[#FEDB71] border border-[#FEDB71]/20"
@@ -325,7 +325,7 @@ export function Dashboard() {
                   <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">{liveCampaign.name}</p>
                 </div>
                 <div className="text-right text-white">
-                  <p className="text-xl font-black italic leading-none mb-1 text-[#FEDB71]">£{liveCampaign.sessionEarnings}</p>
+                  <p className="text-xl font-black italic leading-none mb-1 text-[#FEDB71]">N{liveCampaign.sessionEarnings}</p>
                   <p className="text-[10px] font-black text-[#389C9A] uppercase tracking-widest italic">{liveCampaign.streamTime}</p>
                 </div>
               </div>
@@ -378,7 +378,7 @@ export function Dashboard() {
                   </div>
                 </div>
                 <div className="text-right">
-                  {app.amount && <p className="text-sm font-black italic mb-1 text-[#389C9A]">£{app.amount}</p>}
+                  {app.amount && <p className="text-sm font-black italic mb-1 text-[#389C9A]">N{app.amount}</p>}
                   <div className={`text-[8px] font-black uppercase tracking-widest px-2 py-0.5 ${
                     app.status === "Awaiting Response" ? "text-[#FEDB71]" :
                     app.status === "Under Review" ? "text-blue-500" :
@@ -483,7 +483,7 @@ export function Dashboard() {
             partnerName: selectedRequest.business,
             offerName: selectedRequest.name,
             campaignType: selectedRequest.type,
-            amount: `£${selectedRequest.price}`,
+            amount: `N${selectedRequest.price}`,
             logo: selectedRequest.logo,
             partnerType: "Business"
           }}
