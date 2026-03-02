@@ -1,20 +1,26 @@
-import React, { useState } from "react";
-import { useNavigate, Link, useSearchParams } from "react-router";
-import { 
-  ArrowLeft, 
-  PoundSterling as Pound, 
-  MessageSquare, 
-  CheckCircle2, 
-  Clock, 
-  AlertTriangle, 
-  Target, 
-  Bell,
-  Trash2,
-  Check
+import React, { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router";
+import {
+  ArrowLeft,
+  PoundSterling as Pound,
+  MessageSquare,
+  CheckCircle2,
+  Clock,
+  AlertTriangle,
+  Target,
+  Bell
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { supabase } from "../lib/supabase";
 
-type NotificationType = 'earnings' | 'message' | 'confirmed' | 'action' | 'warning' | 'match' | 'announcement';
+type NotificationType =
+  | "earnings"
+  | "message"
+  | "confirmed"
+  | "action"
+  | "warning"
+  | "match"
+  | "announcement";
 
 interface Notification {
   id: string;
@@ -23,124 +29,103 @@ interface Notification {
   detail: string;
   time: string;
   unread: boolean;
-  group: 'TODAY' | 'YESTERDAY' | 'THIS WEEK' | 'EARLIER';
+  grouping: "TODAY" | "YESTERDAY" | "THIS WEEK" | "EARLIER";
 }
 
 export function Notifications() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const role = searchParams.get('role');
-  const backPath = role === 'business' ? '/business/dashboard' : '/dashboard';
-  
-  const [notifications, setNotifications] = useState<Notification[]>([
-    {
-      id: "1",
-      type: "earnings",
-      title: "Payout of £45.00 processed",
-      detail: "Stream 3 verified — CloudSaaS campaign",
-      time: "1h",
-      unread: true,
-      group: "TODAY"
-    },
-    {
-      id: "2",
-      type: "confirmed",
-      title: "GreenEnergy accepted your proposal",
-      detail: "Banner Only · 4 Streams · £70",
-      time: "3h",
-      unread: true,
-      group: "TODAY"
-    },
-    {
-      id: "3",
-      type: "message",
-      title: "New message from CloudSaaS",
-      detail: "Hi, just checking you received the banner file...",
-      time: "5h",
-      unread: true,
-      group: "TODAY"
-    },
-    {
-      id: "4",
-      type: "action",
-      title: "Stream proof required",
-      detail: "Submit proof for Stream 4 — Summer Sale Blast",
-      time: "Yesterday",
-      unread: false,
-      group: "YESTERDAY"
-    },
-    {
-      id: "5",
-      type: "match",
-      title: "New brand match in your niche",
-      detail: "Aura Fitness is looking for Fitness creators like you",
-      time: "Yesterday",
-      unread: false,
-      group: "YESTERDAY"
-    },
-    {
-      id: "6",
-      type: "warning",
-      title: "Campaign expiring soon",
-      detail: "Pixel Gear campaign closes in 2 days — submit remaining proofs",
-      time: "Mon",
-      unread: false,
-      group: "THIS WEEK"
-    },
-    {
-      id: "7",
-      type: "confirmed",
-      title: "Stream 6 verified successfully",
-      detail: "CloudSaaS · Silver Package · £45.00 unlocked",
-      time: "Sun",
-      unread: false,
-      group: "THIS WEEK"
-    },
-    {
-      id: "8",
-      type: "announcement",
-      title: "Platform update from LiveLink",
-      detail: "New features added to your creator dashboard",
-      time: "Sat",
-      unread: false,
-      group: "THIS WEEK"
-    }
-  ]);
+  const role = searchParams.get("role");
+  const backPath = role === "business" ? "/business/dashboard" : "/dashboard";
 
-  const unreadCount = notifications.filter(n => n.unread).length;
+  const [notifications, setNotifications] = useState<Notification[]>([]);
 
-  const markAllRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, unread: false })));
+  // Fetch notifications from Supabase
+  const fetchNotifications = async () => {
+    const { data, error } = await supabase
+      .from("notifications")
+      .select("*")
+      .order("time", { ascending: false });
+    if (error) console.error(error);
+    else setNotifications(data);
   };
 
-  const clearAll = () => {
-    setNotifications([]);
+  useEffect(() => {
+    fetchNotifications();
+
+    // Realtime subscription
+    const channel = supabase
+      .channel("notifications")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "notifications" },
+        (payload) => {
+          setNotifications((prev) => [payload.new, ...prev]);
+        }
+      )
+      .subscribe();
+
+    return () => supabase.removeChannel(channel);
+  }, []);
+
+  const unreadCount = notifications.filter((n) => n.unread).length;
+
+  const markAllRead = async () => {
+    const { error } = await supabase
+      .from("notifications")
+      .update({ unread: false })
+      .neq("unread", false);
+    if (error) console.error(error);
+    else setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })));
   };
 
-  const markAsRead = (id: string) => {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, unread: false } : n));
+  const clearAll = async () => {
+    const { error } = await supabase.from("notifications").delete();
+    if (error) console.error(error);
+    else setNotifications([]);
+  };
+
+  const markAsRead = async (id: string) => {
+    const { error } = await supabase
+      .from("notifications")
+      .update({ unread: false })
+      .eq("id", id);
+    if (error) console.error(error);
+    else
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, unread: false } : n))
+      );
   };
 
   const getIcon = (type: NotificationType) => {
     switch (type) {
-      case 'earnings': return <Pound className="w-5 h-5 text-[#389C9A]" />;
-      case 'message': return <MessageSquare className="w-5 h-5 text-[#389C9A]" />;
-      case 'confirmed': return <CheckCircle2 className="w-5 h-5 text-[#389C9A]" />;
-      case 'action': return <Clock className="w-5 h-5 text-[#FEDB71]" />;
-      case 'warning': return <AlertTriangle className="w-5 h-5 text-[#D2691E]" />;
-      case 'match': return <Target className="w-5 h-5 text-[#FEDB71]" />;
-      case 'announcement': return <Bell className="w-5 h-5 text-[#1D1D1D]" />;
-      default: return <Bell className="w-5 h-5" />;
+      case "earnings":
+        return <Pound className="w-5 h-5 text-[#389C9A]" />;
+      case "message":
+        return <MessageSquare className="w-5 h-5 text-[#389C9A]" />;
+      case "confirmed":
+        return <CheckCircle2 className="w-5 h-5 text-[#389C9A]" />;
+      case "action":
+        return <Clock className="w-5 h-5 text-[#FEDB71]" />;
+      case "warning":
+        return <AlertTriangle className="w-5 h-5 text-[#D2691E]" />;
+      case "match":
+        return <Target className="w-5 h-5 text-[#FEDB71]" />;
+      case "announcement":
+        return <Bell className="w-5 h-5 text-[#1D1D1D]" />;
+      default:
+        return <Bell className="w-5 h-5" />;
     }
   };
 
+  // Group notifications
   const groupedNotifications = notifications.reduce((acc, n) => {
-    if (!acc[n.group]) acc[n.group] = [];
-    acc[n.group].push(n);
+    if (!acc[n.grouping]) acc[n.grouping] = [];
+    acc[n.grouping].push(n);
     return acc;
   }, {} as Record<string, Notification[]>);
 
-  const groups: Notification['group'][] = ['TODAY', 'YESTERDAY', 'THIS WEEK', 'EARLIER'];
+  const groups: Notification["grouping"][] = ["TODAY", "YESTERDAY", "THIS WEEK", "EARLIER"];
 
   return (
     <div className="flex flex-col min-h-screen bg-white text-[#1D1D1D] pb-[80px]">
@@ -148,8 +133,8 @@ export function Notifications() {
       <header className="px-5 pt-10 pb-4 border-b border-[#1D1D1D]/10 sticky top-0 bg-white z-50">
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <button 
-              onClick={() => navigate(backPath)} 
+            <button
+              onClick={() => navigate(backPath)}
               className="p-1 -ml-1 active:bg-[#1D1D1D]/10 transition-colors"
             >
               <ArrowLeft className="w-5 h-5" />
@@ -157,7 +142,7 @@ export function Notifications() {
             <h1 className="text-xl font-black uppercase tracking-tighter italic">Notifications</h1>
           </div>
           {notifications.length > 0 && (
-            <button 
+            <button
               onClick={markAllRead}
               className="text-[10px] font-black uppercase tracking-widest text-[#389C9A] italic hover:opacity-70 active:scale-95 transition-all"
             >
@@ -175,7 +160,7 @@ export function Notifications() {
               <span className="text-[10px] font-bold uppercase tracking-widest text-[#1D1D1D]/40">
                 {unreadCount} unread
               </span>
-              <button 
+              <button
                 onClick={clearAll}
                 className="text-[10px] font-bold uppercase tracking-widest text-[#1D1D1D]/40 hover:text-[#1D1D1D] transition-colors italic"
               >
@@ -185,7 +170,7 @@ export function Notifications() {
 
             {/* Notification Groups */}
             <div className="flex flex-col">
-              {groups.map(group => {
+              {groups.map((group) => {
                 const groupNotifications = groupedNotifications[group];
                 if (!groupNotifications || groupNotifications.length === 0) return null;
 
@@ -205,37 +190,34 @@ export function Notifications() {
                             initial={{ opacity: 0, x: -10 }}
                             animate={{ opacity: 1, x: 0 }}
                             exit={{ opacity: 0, x: 20 }}
-                            onClick={() => {
-                              markAsRead(n.id);
-                              // In a real app, navigate to relevant screen
-                            }}
+                            onClick={() => markAsRead(n.id)}
                             className={`flex w-full items-start gap-4 px-6 py-6 cursor-pointer relative transition-colors active:bg-[#F8F8F8] border-b border-[#1D1D1D]/5 ${
-                              n.unread ? "bg-[#389C9A]/5 border-l-4 border-l-[#389C9A]" : "bg-white border-l-4 border-l-transparent"
+                              n.unread
+                                ? "bg-[#389C9A]/5 border-l-4 border-l-[#389C9A]"
+                                : "bg-white border-l-4 border-l-transparent"
                             }`}
                           >
                             <div className="flex-shrink-0 w-12 h-12 rounded-full border border-[#1D1D1D]/10 flex items-center justify-center bg-white">
                               {getIcon(n.type)}
                             </div>
-                            
+
                             <div className="flex-1 min-w-0 pr-4">
                               <div className="flex justify-between items-start mb-1">
-                                <h4 className={`text-sm font-black uppercase tracking-tight leading-none truncate ${n.unread ? 'text-[#1D1D1D]' : 'text-[#1D1D1D]/70'}`}>
+                                <h4
+                                  className={`text-sm font-black uppercase tracking-tight leading-none truncate ${
+                                    n.unread ? "text-[#1D1D1D]" : "text-[#1D1D1D]/70"
+                                  }`}
+                                >
                                   {n.title}
                                 </h4>
                                 <span className="text-[9px] font-bold uppercase tracking-widest text-[#1D1D1D]/30 whitespace-nowrap ml-2 italic">
-                                  {n.time}
+                                  {new Date(n.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                                 </span>
                               </div>
-                              <p className="text-[10px] font-medium text-[#1D1D1D]/50 truncate italic">
-                                {n.detail}
-                              </p>
+                              <p className="text-[10px] font-medium text-[#1D1D1D]/50 truncate italic">{n.detail}</p>
                             </div>
 
-                            {n.unread && (
-                              <div className="absolute right-6 top-1/2 -translate-y-1/2">
-                                <div className="w-2 h-2 bg-[#389C9A] rounded-full" />
-                              </div>
-                            )}
+                            {n.unread && <div className="absolute right-6 top-1/2 -translate-y-1/2 w-2 h-2 bg-[#389C9A] rounded-full" />}
                           </motion.div>
                         ))}
                       </AnimatePresence>
@@ -246,7 +228,6 @@ export function Notifications() {
             </div>
           </>
         ) : (
-          /* Empty State */
           <div className="flex flex-col items-center justify-center pt-32 px-10 text-center">
             <div className="w-24 h-24 rounded-none border-2 border-[#1D1D1D]/10 flex items-center justify-center mb-8">
               <Bell className="w-10 h-10 text-[#1D1D1D]/10 stroke-[1.5]" />
@@ -257,8 +238,8 @@ export function Notifications() {
             <p className="text-[11px] font-bold uppercase tracking-widest text-[#1D1D1D]/40 leading-relaxed italic max-w-[280px]">
               When businesses send offers, payments process or campaigns update you will see it here.
             </p>
-            <button 
-              onClick={() => navigate('/dashboard')}
+            <button
+              onClick={() => navigate("/dashboard")}
               className="mt-12 px-8 py-4 border-2 border-[#1D1D1D] text-[10px] font-black uppercase tracking-widest hover:bg-[#1D1D1D] hover:text-white transition-all italic active:scale-95"
             >
               Return to Dashboard

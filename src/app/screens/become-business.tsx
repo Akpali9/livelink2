@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router";
 import { 
@@ -25,10 +24,12 @@ import {
   Target,
   Image as LucideImageIcon,
   Twitter,
-  Linkedin
+  Linkedin,
+  AlertCircle
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useForm, useFieldArray } from "react-hook-form";
+import { useBusinessRegistration } from "../hooks/useBusinessRegistration";
 import { AppHeader } from "../components/app-header";
 
 type BusinessFormData = {
@@ -36,9 +37,10 @@ type BusinessFormData = {
   fullName: string;
   jobTitle: string;
   email: string;
-  password: "";
-  confirmPassword: "";
+  password: string;
+  confirmPassword: string;
   phoneNumber: string;
+  phoneCountryCode: string;
   // Step 2
   businessName: string;
   businessType: string;
@@ -58,9 +60,9 @@ type BusinessFormData = {
   ageMax: number;
   gender: string[];
   targetLocation: string;
-  niches: string[];
   // Step 5
   referral: string;
+  agreeToTerms: boolean;
 };
 
 export function BecomeBusiness() {
@@ -68,16 +70,21 @@ export function BecomeBusiness() {
   const [step, setStep] = useState(1);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [idFile, setIdFile] = useState<File | null>(null);
+  const [idPreview, setIdPreview] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  
+  const { submitRegistration, loading, error } = useBusinessRegistration();
 
-  const { register, handleSubmit, watch, control, formState: { errors } } = useForm<BusinessFormData>({
+  const { register, handleSubmit, watch, control, formState: { errors, isValid } } = useForm<BusinessFormData>({
     defaultValues: {
       socials: [{ platform: "Instagram", handle: "" }],
       goals: [],
       gender: [],
-      niches: [],
       ageMin: 18,
       ageMax: 65,
+      phoneCountryCode: "+44",
+      agreeToTerms: false
     },
     mode: "onChange"
   });
@@ -88,6 +95,8 @@ export function BecomeBusiness() {
   });
 
   const password = watch("password");
+  const confirmPassword = watch("confirmPassword");
+  const agreeToTerms = watch("agreeToTerms");
 
   const getPasswordStrength = () => {
     if (!password) return null;
@@ -96,27 +105,85 @@ export function BecomeBusiness() {
     return { label: "Strong", color: "text-[#389C9A]" };
   };
 
-  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const passwordsMatch = password === confirmPassword;
+
+  const handleIdUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    setUploadError(null);
+    
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setLogoPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      // Validate file type
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
+      if (!allowedTypes.includes(file.type)) {
+        setUploadError('Please upload a JPG, PNG, or PDF file');
+        return;
+      }
+      
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        setUploadError('File size must be less than 5MB');
+        return;
+      }
+      
+      setIdFile(file);
+      
+      // Create preview for images
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setIdPreview(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        // For PDFs, show a different preview
+        setIdPreview('/pdf-icon.png'); // You'd need to add this icon
+      }
     }
   };
 
-  const onSubmit = (data: any) => {
-    console.log("Business Form Data:", data);
-    setIsSubmitted(true);
-    window.scrollTo(0, 0);
+  const removeIdFile = () => {
+    setIdFile(null);
+    setIdPreview(null);
+  };
+
+  const onSubmit = async (data: BusinessFormData) => {
+    if (!idFile) {
+      setUploadError('Please upload a government ID for verification');
+      return;
+    }
+
+    const result = await submitRegistration(data, idFile);
+    
+    if (result.success) {
+      setIsSubmitted(true);
+      window.scrollTo(0, 0);
+    }
+  };
+
+  const validateStep = () => {
+    switch(step) {
+      case 1:
+        return watch("fullName") && watch("email") && password?.length >= 6 && passwordsMatch;
+      case 2:
+        return watch("businessName") && watch("businessType") && watch("industry");
+      case 3:
+        return watch("goals")?.length > 0 && watch("campaignType") && watch("budget");
+      case 4:
+        return idFile !== null;
+      case 5:
+        return agreeToTerms;
+      default:
+        return true;
+    }
   };
 
   const nextStep = () => {
-    setStep(s => Math.min(s + 1, 5));
-    window.scrollTo(0, 0);
+    if (validateStep()) {
+      setStep(s => Math.min(s + 1, 5));
+      window.scrollTo(0, 0);
+    }
   };
+
   const prevStep = () => {
     setStep(s => Math.max(s - 1, 1));
     window.scrollTo(0, 0);
@@ -135,7 +202,8 @@ export function BecomeBusiness() {
           </div>
           <h1 className="text-4xl font-black uppercase tracking-tighter italic mb-4">Application Submitted!</h1>
           <p className="text-[#1D1D1D]/60 mb-12 text-sm leading-relaxed italic">
-            Thank you for registering your business on LiveLink. Our team will review your application and verify your account holder ID within 48 hours. You will receive a notification to the email address you provided once a decision has been made.
+            Thank you for registering your business on LiveLink. Your application ID is <span className="font-bold text-[#389C9A]">{Math.random().toString(36).substring(2, 10).toUpperCase()}</span>. 
+            Our team will review your application and verify your account holder ID within 48 hours. You will receive a notification to {watch("email")} once a decision has been made.
           </p>
 
           <div className="mb-12">
@@ -209,8 +277,8 @@ export function BecomeBusiness() {
       <div className="px-8 py-6 bg-[#F8F8F8] border-b border-[#1D1D1D]/10 sticky top-[84px] z-30 flex justify-between items-center overflow-x-auto whitespace-nowrap gap-4 scrollbar-hide">
         {[1, 2, 3, 4, 5].map(s => (
           <div key={s} className="flex items-center gap-2">
-            <div className={`w-8 h-8 flex items-center justify-center text-[10px] font-black transition-all rounded-none border-2 ${step === s ? 'bg-[#1D1D1D] text-white border-[#1D1D1D]' : 'bg-white text-[#1D1D1D]/30 border-[#1D1D1D]/10'}`}>
-              {s}
+            <div className={`w-8 h-8 flex items-center justify-center text-[10px] font-black transition-all rounded-none border-2 ${step === s ? 'bg-[#1D1D1D] text-white border-[#1D1D1D]' : step > s ? 'bg-[#389C9A] text-white border-[#389C9A]' : 'bg-white text-[#1D1D1D]/30 border-[#1D1D1D]/10'}`}>
+              {step > s ? <CheckCircle2 className="w-4 h-4" /> : s}
             </div>
             {step === s && (
               <span className="text-[10px] font-black uppercase tracking-widest italic">
@@ -221,6 +289,18 @@ export function BecomeBusiness() {
         ))}
       </div>
 
+      {/* Error Message */}
+      {(error || uploadError) && (
+        <div className="px-8 mt-4">
+          <div className="bg-red-50 border border-red-200 p-4 flex gap-3">
+            <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+            <p className="text-[10px] font-bold uppercase tracking-widest text-red-600">
+              {error || uploadError}
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="px-8 mt-12 max-w-[600px] mx-auto w-full flex-1">
         {step === 1 && (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-12">
@@ -230,7 +310,9 @@ export function BecomeBusiness() {
               
               <div className="flex flex-col gap-6">
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-black uppercase tracking-widest italic text-[#1D1D1D]/40">Full Name</label>
+                  <label className="text-[10px] font-black uppercase tracking-widest italic text-[#1D1D1D]/40">
+                    Full Name <span className="text-red-500">*</span>
+                  </label>
                   <input 
                     {...register("fullName", { required: true })}
                     placeholder="The name of the person managing this account"
@@ -239,7 +321,9 @@ export function BecomeBusiness() {
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-black uppercase tracking-widest italic text-[#1D1D1D]/40">Job Title / Role</label>
+                  <label className="text-[10px] font-black uppercase tracking-widest italic text-[#1D1D1D]/40">
+                    Job Title / Role <span className="text-red-500">*</span>
+                  </label>
                   <div className="relative">
                     <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 opacity-30 text-[#389C9A]" />
                     <input 
@@ -251,7 +335,9 @@ export function BecomeBusiness() {
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-black uppercase tracking-widest italic text-[#1D1D1D]/40">Email Address</label>
+                  <label className="text-[10px] font-black uppercase tracking-widest italic text-[#1D1D1D]/40">
+                    Email Address <span className="text-red-500">*</span>
+                  </label>
                   <div className="relative">
                     <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 opacity-30 text-[#389C9A]" />
                     <input 
@@ -265,7 +351,9 @@ export function BecomeBusiness() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] font-black uppercase tracking-widest italic text-[#1D1D1D]/40">Create Password</label>
+                    <label className="text-[10px] font-black uppercase tracking-widest italic text-[#1D1D1D]/40">
+                      Create Password <span className="text-red-500">*</span>
+                    </label>
                     <div className="relative">
                       <input 
                         type={showPassword ? "text" : "password"}
@@ -287,23 +375,35 @@ export function BecomeBusiness() {
                     )}
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] font-black uppercase tracking-widest italic text-[#1D1D1D]/40">Confirm Password</label>
+                    <label className="text-[10px] font-black uppercase tracking-widest italic text-[#1D1D1D]/40">
+                      Confirm Password <span className="text-red-500">*</span>
+                    </label>
                     <input 
                       type="password"
                       {...register("confirmPassword", { required: true })}
-                      className="w-full bg-[#F8F8F8] border border-[#1D1D1D]/10 p-5 text-sm font-bold uppercase tracking-tight outline-none focus:border-[#1D1D1D] transition-all rounded-none"
+                      className={`w-full bg-[#F8F8F8] border p-5 text-sm font-bold uppercase tracking-tight outline-none focus:border-[#1D1D1D] transition-all rounded-none ${
+                        confirmPassword && !passwordsMatch ? 'border-red-500' : 'border-[#1D1D1D]/10'
+                      }`}
                     />
+                    {confirmPassword && !passwordsMatch && (
+                      <p className="text-[9px] font-black uppercase text-red-500 mt-1">Passwords do not match</p>
+                    )}
                   </div>
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-black uppercase tracking-widest italic text-[#1D1D1D]/40">Phone Number</label>
+                  <label className="text-[10px] font-black uppercase tracking-widest italic text-[#1D1D1D]/40">
+                    Phone Number <span className="text-red-500">*</span>
+                  </label>
                   <div className="relative flex">
-                    <select className="bg-white border border-[#1D1D1D]/10 border-r-0 p-5 text-xs font-black uppercase tracking-tight outline-none rounded-none">
-                      <option>+44</option>
-                      <option>+1</option>
-                      <option>+33</option>
-                      <option>+49</option>
+                    <select 
+                      {...register("phoneCountryCode")}
+                      className="bg-white border border-[#1D1D1D]/10 border-r-0 p-5 text-xs font-black uppercase tracking-tight outline-none rounded-none"
+                    >
+                      <option value="+44">+44</option>
+                      <option value="+1">+1</option>
+                      <option value="+33">+33</option>
+                      <option value="+49">+49</option>
                     </select>
                     <div className="relative flex-1">
                       <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 opacity-30 text-[#389C9A]" />
@@ -330,7 +430,9 @@ export function BecomeBusiness() {
 
               <div className="flex flex-col gap-8">
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-black uppercase tracking-widest italic text-[#1D1D1D]/40">Business Name</label>
+                  <label className="text-[10px] font-black uppercase tracking-widest italic text-[#1D1D1D]/40">
+                    Business Name <span className="text-red-500">*</span>
+                  </label>
                   <input 
                     {...register("businessName", { required: true })}
                     placeholder="Your official trading name"
@@ -339,7 +441,9 @@ export function BecomeBusiness() {
                 </div>
 
                 <div className="flex flex-col gap-4">
-                  <label className="text-[10px] font-black uppercase tracking-widest italic text-[#1D1D1D]/40">Business Type</label>
+                  <label className="text-[10px] font-black uppercase tracking-widest italic text-[#1D1D1D]/40">
+                    Business Type <span className="text-red-500">*</span>
+                  </label>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {[
                       { val: "Sole Trader", sub: "I run my business independently" },
@@ -348,7 +452,7 @@ export function BecomeBusiness() {
                       { val: "Other / Not Registered", sub: "Informal or early stages" }
                     ].map(type => (
                       <label key={type.val} className="cursor-pointer group">
-                        <input type="radio" {...register("businessType")} value={type.val} className="peer hidden" />
+                        <input type="radio" {...register("businessType", { required: true })} value={type.val} className="peer hidden" />
                         <div className="p-4 border-2 border-[#1D1D1D]/10 bg-white peer-checked:bg-[#1D1D1D] peer-checked:text-white transition-all rounded-none">
                           <p className="text-[10px] font-black uppercase tracking-widest mb-1 italic">{type.val}</p>
                           <p className="text-[8px] font-medium uppercase opacity-40 peer-checked:opacity-60 italic">{type.sub}</p>
@@ -360,7 +464,9 @@ export function BecomeBusiness() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] font-black uppercase tracking-widest italic text-[#1D1D1D]/40">Industry / Category</label>
+                    <label className="text-[10px] font-black uppercase tracking-widest italic text-[#1D1D1D]/40">
+                      Industry / Category <span className="text-red-500">*</span>
+                    </label>
                     <select {...register("industry", { required: true })} className="w-full bg-white border-2 border-[#1D1D1D]/10 p-5 text-xs font-black uppercase tracking-tight outline-none rounded-none italic">
                       <option value="">Select Category</option>
                       <option>Food & Drink</option>
@@ -449,10 +555,11 @@ export function BecomeBusiness() {
                   <div className="flex flex-col gap-1.5">
                     <label className="text-[10px] font-black uppercase tracking-widest italic text-[#1D1D1D]/40">Country</label>
                     <select {...register("country", { required: true })} className="w-full bg-white border-2 border-[#1D1D1D]/10 p-5 text-xs font-black uppercase tracking-tight outline-none rounded-none italic">
-                      <option>United Kingdom</option>
-                      <option>United States</option>
-                      <option>Canada</option>
-                      <option>France</option>
+                      <option value="">Select Country</option>
+                      <option value="United Kingdom">United Kingdom</option>
+                      <option value="United States">United States</option>
+                      <option value="Canada">Canada</option>
+                      <option value="France">France</option>
                     </select>
                   </div>
                   <div className="flex flex-col gap-1.5">
@@ -477,7 +584,9 @@ export function BecomeBusiness() {
 
               <div className="flex flex-col gap-12">
                 <div className="flex flex-col gap-6">
-                  <label className="text-[10px] font-black uppercase tracking-widest italic">Primary Advertising Goals</label>
+                  <label className="text-[10px] font-black uppercase tracking-widest italic">
+                    Primary Advertising Goals <span className="text-red-500">*</span>
+                  </label>
                   <div className="flex flex-wrap gap-2">
                     {[
                       "Brand Awareness", "Drive Website Traffic", "Promote a Product", "Promote a Service", "Grow Social Media", "Drive Footfall", "Launch Product", "Promote Event", "Direct Sales", "Other"
@@ -493,7 +602,9 @@ export function BecomeBusiness() {
                 </div>
 
                 <div className="flex flex-col gap-6">
-                  <label className="text-[10px] font-black uppercase tracking-widest italic text-[#1D1D1D]/40">Campaign Type Interests</label>
+                  <label className="text-[10px] font-black uppercase tracking-widest italic text-[#1D1D1D]/40">
+                    Campaign Type Interests <span className="text-red-500">*</span>
+                  </label>
                   <div className="grid grid-cols-1 gap-4">
                     {[
                       { val: "Banner Advertising", icon: "📺", sub: "My branded banner appears on creator live streams" },
@@ -501,7 +612,7 @@ export function BecomeBusiness() {
                       { val: "Banner + Promo Code", icon: "⭐", sub: "Maximum exposure combining both options. Recommended" }
                     ].map(opt => (
                       <label key={opt.val} className="cursor-pointer">
-                        <input type="radio" {...register("campaignType")} value={opt.val} className="peer hidden" />
+                        <input type="radio" {...register("campaignType", { required: true })} value={opt.val} className="peer hidden" />
                         <div className="p-8 border-2 border-[#1D1D1D]/10 bg-white peer-checked:bg-[#1D1D1D] peer-checked:text-white transition-all flex items-center gap-6 rounded-none">
                           <span className="text-3xl">{opt.icon}</span>
                           <div>
@@ -515,13 +626,15 @@ export function BecomeBusiness() {
                 </div>
 
                 <div className="flex flex-col gap-6">
-                  <label className="text-[10px] font-black uppercase tracking-widest italic">Estimated Monthly Budget</label>
+                  <label className="text-[10px] font-black uppercase tracking-widest italic">
+                    Estimated Monthly Budget <span className="text-red-500">*</span>
+                  </label>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                     {[
                       "Under ₦100k", "₦100k to ₦300k", "₦300k to ₦500k", "₦500k to ₦1000k", "Over ₦1000k", "Not sure yet"
                     ].map(opt => (
                       <label key={opt} className="cursor-pointer">
-                        <input type="radio" {...register("budget")} value={opt} className="peer hidden" />
+                        <input type="radio" {...register("budget", { required: true })} value={opt} className="peer hidden" />
                         <div className="p-5 border-2 border-[#1D1D1D]/10 bg-white peer-checked:bg-[#389C9A] peer-checked:text-white peer-checked:border-[#389C9A] transition-all text-center rounded-none italic">
                           <p className="text-[10px] font-black uppercase tracking-widest">{opt}</p>
                         </div>
@@ -569,15 +682,47 @@ export function BecomeBusiness() {
               <h2 className="text-2xl font-black uppercase tracking-tight italic mb-2">Account Verification</h2>
               <p className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-8 italic">Please upload a valid form of government ID for the account holder.</p>
               
-              <div className="border-2 border-dashed border-[#1D1D1D]/20 p-12 flex flex-col items-center gap-6 bg-[#F8F8F8] rounded-none group hover:border-[#1D1D1D] cursor-pointer transition-all">
-                <div className="p-6 border-2 border-[#1D1D1D] bg-white group-hover:bg-[#1D1D1D] group-hover:text-white transition-all rounded-none">
-                  <Upload className="w-8 h-8 text-[#389C9A] group-hover:text-[#FEDB71]" />
+              {!idFile ? (
+                <div className="border-2 border-dashed border-[#1D1D1D]/20 p-12 flex flex-col items-center gap-6 bg-[#F8F8F8] rounded-none group hover:border-[#1D1D1D] cursor-pointer transition-all">
+                  <input
+                    type="file"
+                    id="id-upload"
+                    accept=".jpg,.jpeg,.png,.pdf"
+                    onChange={handleIdUpload}
+                    className="hidden"
+                  />
+                  <label htmlFor="id-upload" className="cursor-pointer text-center w-full">
+                    <div className="p-6 border-2 border-[#1D1D1D] bg-white group-hover:bg-[#1D1D1D] group-hover:text-white transition-all rounded-none inline-block mb-4">
+                      <Upload className="w-8 h-8 text-[#389C9A] group-hover:text-[#FEDB71]" />
+                    </div>
+                    <div className="text-center">
+                      <p className="text-[10px] font-black uppercase tracking-widest mb-2 italic">Upload Government Issued ID</p>
+                      <p className="text-[8px] font-bold uppercase opacity-30 tracking-widest italic">Passport, Driver License, or National ID</p>
+                      <p className="text-[8px] font-bold uppercase text-[#389C9A] mt-2">JPG, PNG, or PDF (Max 5MB)</p>
+                    </div>
+                  </label>
                 </div>
-                <div className="text-center">
-                  <p className="text-[10px] font-black uppercase tracking-widest mb-2 italic">Upload Government Issued ID</p>
-                  <p className="text-[8px] font-bold uppercase opacity-30 tracking-widest italic">Passport, Driver License, or National ID</p>
+              ) : (
+                <div className="border-2 border-[#389C9A] p-8 bg-[#F8F8F8] flex items-center gap-6">
+                  {idPreview && idFile.type.startsWith('image/') ? (
+                    <img src={idPreview} alt="ID Preview" className="w-20 h-20 object-cover" />
+                  ) : (
+                    <div className="w-20 h-20 bg-[#1D1D1D] flex items-center justify-center text-white font-black">
+                      PDF
+                    </div>
+                  )}
+                  <div className="flex-1">
+                    <p className="text-[10px] font-black uppercase mb-1">{idFile.name}</p>
+                    <p className="text-[8px] opacity-40 uppercase">{(idFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                  </div>
+                  <button 
+                    onClick={removeIdFile}
+                    className="p-3 bg-red-50 text-red-500 border border-red-200"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
-              </div>
+              )}
 
               <div className="flex flex-col gap-6 pt-12 border-t-2 border-[#1D1D1D]/10">
                 <div className="flex flex-col gap-1.5">
@@ -608,6 +753,14 @@ export function BecomeBusiness() {
                   <span className="text-[10px] font-bold uppercase text-[#1D1D1D]/40">Industry</span>
                   <span className="text-[10px] font-black uppercase">{watch("industry") || "Not entered"}</span>
                 </div>
+                <div className="flex justify-between items-center border-b border-[#1D1D1D]/10 pb-4 italic">
+                  <span className="text-[10px] font-bold uppercase text-[#1D1D1D]/40">Campaign Type</span>
+                  <span className="text-[10px] font-black uppercase">{watch("campaignType") || "Not selected"}</span>
+                </div>
+                <div className="flex justify-between items-center border-b border-[#1D1D1D]/10 pb-4 italic">
+                  <span className="text-[10px] font-bold uppercase text-[#1D1D1D]/40">Monthly Budget</span>
+                  <span className="text-[10px] font-black uppercase">{watch("budget") || "Not selected"}</span>
+                </div>
                 <div className="flex justify-between items-center italic">
                   <span className="text-[10px] font-bold uppercase text-[#1D1D1D]/40">Contact</span>
                   <span className="text-[10px] font-black uppercase">{watch("fullName") || "Not entered"}</span>
@@ -616,12 +769,18 @@ export function BecomeBusiness() {
 
               <div className="mt-8 flex flex-col gap-4">
                 <label className="flex items-start gap-3 cursor-pointer group">
-                  <input type="checkbox" required className="peer hidden" />
-                  <div className="mt-1 w-5 h-5 border-2 border-[#1D1D1D] flex items-center justify-center bg-white peer-checked:bg-[#389C9A] peer-checked:border-[#389C9A] transition-all rounded-none">
-                    <CheckCircle2 className="w-3 h-3 text-white" />
+                  <input 
+                    type="checkbox" 
+                    {...register("agreeToTerms")}
+                    className="peer hidden" 
+                  />
+                  <div className={`mt-1 w-5 h-5 border-2 flex items-center justify-center transition-all rounded-none ${
+                    agreeToTerms ? 'bg-[#389C9A] border-[#389C9A]' : 'border-[#1D1D1D] bg-white'
+                  }`}>
+                    {agreeToTerms && <CheckCircle2 className="w-3 h-3 text-white" />}
                   </div>
                   <span className="text-[10px] font-bold leading-tight opacity-60 italic uppercase tracking-tight">
-                    I agree to LiveLink's Terms of Service and Privacy Policy. I confirm that I am authorized to advertise on behalf of this business.
+                    I agree to LiveLink's Terms of Service and Privacy Policy. I confirm that I am authorized to advertise on behalf of this business. <span className="text-red-500">*</span>
                   </span>
                 </label>
               </div>
@@ -643,12 +802,36 @@ export function BecomeBusiness() {
           )}
           <button 
             onClick={step === 5 ? handleSubmit(onSubmit) : nextStep}
-            className="flex-1 flex items-center justify-between bg-[#1D1D1D] text-white p-6 font-black uppercase tracking-tight active:scale-[0.98] transition-all rounded-none italic"
+            disabled={!validateStep() || loading}
+            className={`flex-1 flex items-center justify-between p-6 font-black uppercase tracking-tight transition-all rounded-none italic ${
+              validateStep() && !loading
+                ? 'bg-[#1D1D1D] text-white active:scale-[0.98]' 
+                : 'bg-[#1D1D1D]/30 text-white/50 cursor-not-allowed'
+            }`}
           >
-            <span>{step === 5 ? "Submit Registration" : "Continue"}</span>
-            <ArrowRight className="w-5 h-5 text-[#FEDB71]" />
+            <span>
+              {loading ? 'Submitting...' : (step === 5 ? 'Submit Registration' : 'Continue')}
+            </span>
+            {!loading && <ArrowRight className="w-5 h-5 text-[#FEDB71]" />}
           </button>
         </div>
+        
+        {/* Step validation message */}
+        {!validateStep() && step < 5 && (
+          <p className="text-[9px] font-black uppercase text-red-500 mt-3 text-center">
+            Please fill in all required fields before continuing
+          </p>
+        )}
+        {step === 4 && !idFile && (
+          <p className="text-[9px] font-black uppercase text-red-500 mt-3 text-center">
+            Please upload your ID document to continue
+          </p>
+        )}
+        {step === 5 && !agreeToTerms && (
+          <p className="text-[9px] font-black uppercase text-red-500 mt-3 text-center">
+            You must agree to the terms to submit
+          </p>
+        )}
       </div>
     </div>
   );

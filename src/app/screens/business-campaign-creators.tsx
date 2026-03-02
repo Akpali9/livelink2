@@ -1,129 +1,166 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { 
-  ArrowLeft, 
-  Users, 
-  ChevronRight, 
-  Star,
-  Tv,
-  MessageSquare
-} from "lucide-react";
+import { ArrowLeft, ChevronRight, Star, Tv } from "lucide-react";
 import { AppHeader } from "../components/app-header";
 import { ImageWithFallback } from "../components/figma/ImageWithFallback";
+import { supabase } from "../lib/supabase";
 
 export function BusinessCampaignCreators() {
   const navigate = useNavigate();
   const { id } = useParams();
 
-  // Mock data for the campaign and its creators
-  const campaign = {
-    id: id || "c1",
-    name: id === "c1" ? "SUMMER SALE BLAST" : "SPRING LAUNCH",
-    type: id === "c1" ? "Banner + Code" : "Banner Only",
-    creators: [
-      {
-        id: "cr1",
-        name: "Alex Rivers",
-        handle: "@alexrivers",
-        avatar: "https://images.unsplash.com/photo-1758179759979-c0c2235ae172?w=100&h=100&fit=crop",
-        status: "ACTIVE",
-        streams: "6/12",
-        rating: 4.9
-      },
-      {
-        id: "cr2",
-        name: "Sarah Stream",
-        handle: "@sarahstream",
-        avatar: "https://images.unsplash.com/photo-1516321497487-e288fb19713f?w=100&h=100&fit=crop",
-        status: "ACTIVE",
-        streams: "4/8",
-        rating: 4.8
-      },
-      {
-        id: "cr3",
-        name: "Jordan Plays",
-        handle: "@jordanplays",
-        avatar: "https://images.unsplash.com/photo-1571171637448-4a6ef83cd9c7?w=100&h=100&fit=crop",
-        status: "NOT STARTED",
-        streams: "0/4",
-        rating: 4.7
-      }
-    ]
+  const [campaign, setCampaign] = useState<any>(null);
+  const [creators, setCreators] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (id) fetchCampaignData();
+  }, [id]);
+
+  const fetchCampaignData = async () => {
+    setLoading(true);
+
+    // 1️⃣ Fetch campaign
+    const { data: campaignData } = await supabase
+      .from("campaigns")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (campaignData) {
+      setCampaign(campaignData);
+    }
+
+    // 2️⃣ Fetch creators linked to campaign
+    const { data: linkedCreators } = await supabase
+      .from("campaign_creators")
+      .select(`
+        id,
+        status,
+        streams_completed,
+        streams_required,
+        creators (
+          id,
+          name,
+          handle,
+          avatar,
+          rating
+        )
+      `)
+      .eq("campaign_id", id);
+
+    if (linkedCreators) {
+      setCreators(linkedCreators);
+    }
+
+    setLoading(false);
   };
 
+  if (loading) {
+    return <div className="p-10 text-center">Loading...</div>;
+  }
+
+  if (!campaign) {
+    return <div className="p-10 text-center">Campaign not found</div>;
+  }
+
   return (
-    <div className="flex flex-col min-h-screen bg-white text-[#1D1D1D] pb-24">
+    <div className="flex flex-col min-h-screen bg-white pb-24">
       <AppHeader showBack backPath="/business/dashboard" title="Campaign Creators" />
-      
+
       <main className="flex-1">
-        {/* Campaign Header Summary */}
-        <section className="px-8 py-8 border-b-2 border-[#1D1D1D] bg-[#F8F8F8]/30">
-          <div className="flex flex-col gap-2">
-            <h2 className="text-2xl font-black uppercase tracking-tighter italic leading-none">{campaign.name}</h2>
-            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#389C9A] italic">{campaign.type}</p>
-          </div>
+        {/* Campaign Header */}
+        <section className="px-8 py-8 border-b-2 bg-gray-50">
+          <h2 className="text-2xl font-black uppercase italic">
+            {campaign.name}
+          </h2>
+          <p className="text-xs font-bold text-teal-600 uppercase">
+            {campaign.type}
+          </p>
         </section>
 
         {/* Creators List */}
         <section className="px-8 py-12">
-          <div className="flex items-center justify-between mb-8">
-            <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-[#1D1D1D]/40 italic">Active Creators</h3>
-            <span className="text-[10px] font-black uppercase tracking-tight italic">{campaign.creators.length} Partners</span>
+          <div className="mb-8 flex justify-between">
+            <h3 className="text-xs font-bold uppercase text-gray-400">
+              Active Creators
+            </h3>
+            <span className="text-xs font-bold">
+              {creators.length} Partners
+            </span>
           </div>
 
           <div className="flex flex-col gap-4">
-            {campaign.creators.map((creator) => (
-              <div 
-                key={creator.id}
-                onClick={() => navigate(`/business/campaign/${campaign.id}/creator/${creator.id}`)}
-                className="bg-white border-2 border-[#1D1D1D] p-5 flex items-center gap-5 cursor-pointer active:scale-[0.98] transition-all group"
-              >
-                {/* Avatar */}
-                <div className="w-14 h-14 border-2 border-[#1D1D1D] overflow-hidden shrink-0">
-                  <ImageWithFallback src={creator.avatar} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all" />
-                </div>
+            {creators.map((item: any) => {
+              const creator = item.creators;
 
-                {/* Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <h4 className="font-black uppercase tracking-tight text-lg italic leading-none truncate">{creator.name}</h4>
-                    <div className="flex items-center gap-0.5 px-1.5 py-0.5 bg-[#FEDB71] border border-[#1D1D1D]/10 text-[7px] font-black italic">
-                      <Star className="w-2 h-2 fill-[#1D1D1D]" />
-                      {creator.rating}
+              return (
+                <div
+                  key={item.id}
+                  onClick={() =>
+                    navigate(`/business/campaign/${campaign.id}/creator/${creator.id}`)
+                  }
+                  className="border-2 p-5 flex items-center gap-5 cursor-pointer"
+                >
+                  <div className="w-14 h-14 border overflow-hidden">
+                    <ImageWithFallback
+                      src={creator.avatar}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-bold text-lg">
+                        {creator.name}
+                      </h4>
+                      <div className="flex items-center gap-1 text-xs bg-yellow-200 px-2">
+                        <Star size={10} />
+                        {creator.rating}
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-gray-400">
+                      {creator.handle}
+                    </p>
+
+                    <div className="flex items-center gap-2 mt-2 text-xs">
+                      <Tv size={12} />
+                      Streams: {item.streams_completed}/{item.streams_required}
                     </div>
                   </div>
-                  <p className="text-[9px] font-bold uppercase tracking-widest text-[#1D1D1D]/40 italic mb-2">{creator.handle}</p>
-                  
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-1.5">
-                      <Tv className="w-3 h-3 text-[#389C9A]" />
-                      <span className="text-[9px] font-black uppercase tracking-tight italic">Streams: {creator.streams}</span>
-                    </div>
-                  </div>
-                </div>
 
-                {/* Status & Arrow */}
-                <div className="flex flex-col items-end gap-3">
-                  <div className={`px-2 py-0.5 text-[7px] font-black uppercase tracking-widest italic border ${
-                    creator.status === 'ACTIVE' ? 'bg-[#389C9A] text-white border-[#389C9A]' : 'bg-gray-100 text-gray-400 border-gray-200'
-                  }`}>
-                    {creator.status}
+                  <div className="text-right">
+                    <div
+                      className={`text-xs px-2 py-1 ${
+                        item.status === "ACTIVE"
+                          ? "bg-teal-600 text-white"
+                          : "bg-gray-200 text-gray-400"
+                      }`}
+                    >
+                      {item.status}
+                    </div>
+
+                    <ChevronRight size={18} />
                   </div>
-                  <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
-          {/* Quick Support */}
-          <div className="mt-12 p-8 bg-[#1D1D1D] text-white flex flex-col gap-4 italic">
-            <h4 className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60">Need more creators?</h4>
-            <p className="text-lg font-black uppercase tracking-tighter leading-tight italic">Your campaign is still accepting applications.</p>
-            <button 
+          {/* Browse Marketplace CTA */}
+          <div className="mt-12 p-8 bg-black text-white">
+            <h4 className="text-xs uppercase opacity-60">
+              Need more creators?
+            </h4>
+            <p className="text-lg font-bold">
+              Your campaign is still accepting applications.
+            </p>
+            <button
               onClick={() => navigate("/browse")}
-              className="mt-2 text-[10px] font-black uppercase tracking-widest text-[#FEDB71] border-b border-[#FEDB71] w-fit flex items-center gap-2"
+              className="mt-4 text-yellow-400 text-xs uppercase flex items-center gap-2"
             >
-              BROWSE MARKETPLACE <ChevronRight className="w-3 h-3" />
+              Browse Marketplace <ChevronRight size={12} />
             </button>
           </div>
         </section>

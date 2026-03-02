@@ -2,14 +2,36 @@ import React, { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { motion } from "motion/react";
 import { Mail, Lock, Eye, EyeOff, ArrowRight, Chrome, Apple } from "lucide-react";
+import { supabase } from "../lib/supabase"; // adjust path as needed
+import { toast } from "sonner"; // optional: for notifications
 
 export function BusinessLogin() {
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    navigate("/business/dashboard");
+    setLoading(true);
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    setLoading(false);
+
+    if (error) {
+      toast.error(error.message || "Login failed");
+      return;
+    }
+
+    if (data.user) {
+      toast.success("Login successful!");
+      navigate("/business/dashboard");
+    }
   };
 
   return (
@@ -35,7 +57,9 @@ export function BusinessLogin() {
           </span>
         </div>
 
-        <h1 className="text-3xl font-black uppercase tracking-tighter italic text-[#1D1D1D] mb-2">Welcome Back</h1>
+        <h1 className="text-3xl font-black uppercase tracking-tighter italic text-[#1D1D1D] mb-2">
+          Welcome Back
+        </h1>
         <p className="text-sm font-medium italic text-[#1D1D1D]/40 text-center max-w-[280px] leading-relaxed">
           Sign in to manage your campaigns and find your next creator partner.
         </p>
@@ -44,6 +68,7 @@ export function BusinessLogin() {
       {/* Login Form */}
       <form onSubmit={handleSubmit} className="flex flex-col gap-6 flex-1">
         <div className="space-y-6">
+          {/* Email Field */}
           <div className="flex flex-col gap-2">
             <label className="text-[10px] font-black uppercase tracking-widest text-[#1D1D1D]/40 italic ml-1">
               Email Address
@@ -53,12 +78,15 @@ export function BusinessLogin() {
               <input 
                 type="email"
                 placeholder="Enter your email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="w-full bg-[#F8F8F8] border-2 border-[#1D1D1D]/5 focus:border-[#1D1D1D] focus:bg-white p-5 pl-14 text-sm font-medium italic outline-none transition-all placeholder:text-[#1D1D1D]/20"
                 required
               />
             </div>
           </div>
 
+          {/* Password Field */}
           <div className="flex flex-col gap-2">
             <label className="text-[10px] font-black uppercase tracking-widest text-[#1D1D1D]/40 italic ml-1">
               Password
@@ -68,6 +96,8 @@ export function BusinessLogin() {
               <input 
                 type={showPassword ? "text" : "password"}
                 placeholder="Enter your password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 className="w-full bg-[#F8F8F8] border-2 border-[#1D1D1D]/5 focus:border-[#1D1D1D] focus:bg-white p-5 pl-14 pr-14 text-sm font-medium italic outline-none transition-all placeholder:text-[#1D1D1D]/20"
                 required
               />
@@ -85,20 +115,16 @@ export function BusinessLogin() {
           </div>
         </div>
 
+        {/* Sign In Button */}
         <button 
           type="submit"
-          className="w-full bg-[#1D1D1D] text-white p-5 text-lg font-black uppercase italic tracking-tighter flex items-center justify-center gap-4 active:scale-[0.98] transition-all"
+          disabled={loading}
+          className="w-full bg-[#1D1D1D] text-white p-5 text-lg font-black uppercase italic tracking-tighter flex items-center justify-center gap-4 active:scale-[0.98] transition-all disabled:opacity-50"
         >
-          Sign In <ArrowRight className="w-6 h-6 text-[#FEDB71]" />
+          {loading ? "Signing In..." : "Sign In"} <ArrowRight className="w-6 h-6 text-[#FEDB71]" />
         </button>
 
-        <div className="relative flex items-center justify-center my-4">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-[#1D1D1D]/10"></div>
-          </div>
-          <span className="relative bg-white px-4 text-[10px] font-black uppercase tracking-widest text-[#1D1D1D]/20 italic">or</span>
-        </div>
-
+        {/* Social Login */}
         <div className="grid grid-cols-2 gap-4">
           <button type="button" className="flex items-center justify-center gap-3 border-2 border-[#1D1D1D]/5 p-4 hover:border-[#1D1D1D] transition-all active:scale-[0.98]">
             <Chrome className="w-4 h-4" />
