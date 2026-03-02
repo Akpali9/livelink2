@@ -1,15 +1,13 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation, Link } from "react-router";
-import { 
-  MessageSquare, 
-  Bell, 
-  User, 
-  ArrowLeft,
-  X,
-  Settings,
-  LogOut
-} from "lucide-react";
+import { MessageSquare, Bell, User, ArrowLeft, Settings, LogOut } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { createClient } from "@supabase/supabase-js";
+
+// Supabase client initialization
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 interface AppHeaderProps {
   title?: string;
@@ -31,13 +29,27 @@ export function AppHeader({
   const navigate = useNavigate();
   const location = useLocation();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [userName, setUserName] = useState<string | null>(null);
 
-  const userName = userType === "business" ? "Acme Marketing" : "ALEX";
   const profilePath = userType === "business" ? "/business/profile" : "/profile/me";
 
   const isHome = location.pathname === "/";
   const isMessages = location.pathname.startsWith("/messages");
   const showActions = !isHome && !isMessages;
+
+  // Fetch user name from Supabase
+  useEffect(() => {
+    const fetchUser = async () => {
+      const { data, error } = await supabase.auth.getUser();
+      if (data) {
+        setUserName(userType === 'business' ? data.user?.email : "ALEX"); // Or any field from Supabase user data
+      } else {
+        console.error(error);
+      }
+    };
+    
+    fetchUser();
+  }, [userType]);
 
   return (
     <header className="px-5 pt-10 pb-4 border-b border-[#1D1D1D]/10 sticky top-0 bg-white z-50">
@@ -118,16 +130,11 @@ export function AppHeader({
                       >
                         <Settings className="w-3.5 h-3.5 text-[#389C9A]" /> {userType === 'business' ? 'Business Settings' : 'Settings'}
                       </button>
-                      <Link  to="/login/portal" 
-               >
-               
                       <button 
-                          onClick={() => backPath ? navigate(backPath) : navigate(1)}
                         className="w-full text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest hover:bg-[#1D1D1D] hover:text-white text-red-500 flex items-center gap-3 transition-colors italic"
                       >
                         <LogOut className="w-3.5 h-3.5" /> Logout
                       </button>
-                        </Link>
                     </div>
                   </motion.div>
                 </>
@@ -138,4 +145,4 @@ export function AppHeader({
       </div>
     </header>
   );
-          }
+}
