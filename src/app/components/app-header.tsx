@@ -1,13 +1,10 @@
+// src/components/AppHeader.tsx
+
 import React, { useState, useEffect } from "react";
-import { useNavigate, useLocation, Link } from "react-router";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import { MessageSquare, Bell, User, ArrowLeft, Settings, LogOut } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { createClient } from "@supabase/supabase-js";
-
-// Supabase client initialization
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
+import { supabase } from "../lib/supabase"; // Import the centralized supabase client
 
 interface AppHeaderProps {
   title?: string;
@@ -42,12 +39,12 @@ export function AppHeader({
     const fetchUser = async () => {
       const { data, error } = await supabase.auth.getUser();
       if (data) {
-        setUserName(userType === 'business' ? data.user?.email : "ALEX"); // Or any field from Supabase user data
+        setUserName(userType === 'business' ? data.user?.email : "ALEX"); // Replace "ALEX" with any field from Supabase user data
       } else {
         console.error(error);
       }
     };
-    
+
     fetchUser();
   }, [userType]);
 
