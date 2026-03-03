@@ -3,12 +3,7 @@ import { useNavigate } from "react-router";
 import { ArrowLeft, ArrowRight, MessageSquare, Bell, User, Plus, Minus, Info } from "lucide-react";
 import { motion } from "motion/react";
 import { createClient } from "@supabase/supabase-js";
-
-// Initialize Supabase client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
-
+import { supabase } from "../lib/supabase";
 type CampaignGoal = "awareness" | "traffic" | "product" | "event" | "general" | null;
 type OfferDuration = "3" | "7" | "14" | "30" | "indefinite" | null;
 type StreamDeadline = "1" | "2" | "3" | "4" | null;

@@ -24,6 +24,7 @@ export function MessageThread() {
   const [inputText, setInputText] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Fetch messages
   const fetchMessages = async () => {
     if (!id) return;
     const { data, error } = await supabase
@@ -33,6 +34,14 @@ export function MessageThread() {
       .order("created_at", { ascending: true });
     if (error) console.error(error);
     else setMessages(data);
+
+    // Mark all unseen messages as seen
+    await supabase
+      .from("messages")
+      .update({ seen: true })
+      .eq("conversation_id", id)
+      .eq("sender_type", userType === "creator" ? "business" : "creator")
+      .eq("seen", false);
   };
 
   useEffect(() => {
@@ -75,17 +84,6 @@ export function MessageThread() {
         <button onClick={() => navigate(-1)} className="p-1 -ml-1">
           <ArrowLeft className="w-6 h-6 text-white" />
         </button>
-        <div className="flex-1 flex items-center gap-3 ml-2">
-          <div className="w-8 h-8 rounded-none overflow-hidden border border-white/20 bg-white/10 shrink-0">
-            <ImageWithFallback src="/default-logo.png" className="w-full h-full object-cover grayscale" />
-          </div>
-          <div className="flex flex-col leading-none">
-            <h3 className="text-[14px] font-black uppercase tracking-tight text-white">Business Name</h3>
-            <span className="text-[9px] font-bold text-white/60 truncate max-w-[150px] uppercase tracking-widest italic">
-              Campaign Name
-            </span>
-          </div>
-        </div>
       </div>
 
       <main ref={scrollRef} className="flex-1 pt-14 pb-[120px] overflow-y-auto px-4 flex flex-col space-y-6">
@@ -130,9 +128,7 @@ export function MessageThread() {
         <button
           onClick={sendMessage}
           className={`w-10 h-10 rounded-none flex items-center justify-center transition-all ${
-            inputText.trim()
-              ? "bg-[#1D1D1D] text-white scale-100"
-              : "bg-[#1D1D1D]/5 text-[#1D1D1D]/30 scale-95"
+            inputText.trim() ? "bg-[#1D1D1D] text-white scale-100" : "bg-[#1D1D1D]/5 text-[#1D1D1D]/30 scale-95"
           }`}
         >
           <Send className="w-4 h-4 fill-current text-[#FEDB71]" />

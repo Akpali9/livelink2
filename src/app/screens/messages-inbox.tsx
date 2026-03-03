@@ -25,6 +25,7 @@ export function MessagesInbox() {
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
 
+  // Fetch conversations with unread status
   const fetchConversations = async () => {
     const { data, error } = await supabase
       .from("conversations")
@@ -61,17 +62,23 @@ export function MessagesInbox() {
   useEffect(() => {
     fetchConversations();
 
-    const sub = supabase
+    // Realtime listener for new messages
+    const channel = supabase
       .channel("messages-inbox")
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "messages" },
-        () => fetchConversations()
+        (payload) => {
+          fetchConversations();
+        }
       )
       .subscribe();
 
-    return () => supabase.removeChannel(sub);
+    return () => supabase.removeChannel(channel);
   }, []);
+
+  // Compute total unread messages
+  const totalUnread = conversations.filter(c => c.unread).length;
 
   return (
     <div className="flex flex-col min-h-screen bg-white text-[#1D1D1D] pb-[60px]">
@@ -93,8 +100,28 @@ export function MessagesInbox() {
           {conversations.map((conv) => (
             <div
               key={conv.id}
-              onClick={() => navigate(`/messages/${conv.id}?role=${userType}`)}
-              className="h-[80px] flex items-center px-6 gap-4 border-b border-[#1D1D1D]/10 last:border-0 active:bg-[#F8F8F8] transition-colors cursor-pointer group"
+              onClick={async () => {
+                // Navigate to conversation
+                navigate(`/messages/${conv.id}?role=${userType}`);
+
+                // Mark all messages as seen
+                await supabase
+                  .from("messages")
+                  .update({ seen: true })
+                  .eq("conversation_id", conv.id)
+                  .eq("sender_type", userType === "creator" ? "business" : "creator")
+                  .eq("seen", false);
+
+                // Update local state immediately
+                setConversations(prev =>
+                  prev.map(c =>
+                    c.id === conv.id ? { ...c, unread: false } : c
+                  )
+                );
+              }}
+              className={`h-[80px] flex items-center px-6 gap-4 border-b border-[#1D1D1D]/10 last:border-0 active:bg-[#F8F8F8] transition-colors cursor-pointer group ${
+                conv.unread ? "bg-[#389C9A]/5" : "bg-white"
+              }`}
             >
               <div className="w-12 h-12 rounded-none overflow-hidden border-2 border-[#1D1D1D]/10 shrink-0 bg-[#F8F8F8]">
                 <ImageWithFallback
@@ -118,7 +145,9 @@ export function MessagesInbox() {
                   <p className="text-[11px] text-[#1D1D1D]/60 truncate leading-none font-medium italic">
                     {conv.last_message}
                   </p>
-                  {conv.unread && <div className="w-2 h-2 bg-[#389C9A] rounded-none shrink-0 border border-[#1D1D1D]/10" />}
+                  {conv.unread && (
+                    <div className="w-2 h-2 bg-[#389C9A] rounded-none shrink-0 border border-[#1D1D1D]/10" />
+                  )}
                 </div>
               </div>
             </div>

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { supabase } from "../lib/supabase";
-import { useNavigate } from "react-router";
+import { useNavigate } from "react-router-dom";
 import { Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react";
 import { toast, Toaster } from "sonner";
 
@@ -12,16 +12,43 @@ export function CreatorLogin() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { data, error } = await supabase.auth.signInWithPassword({
+
+    // Sign in using Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
-    if (error) {
-      toast.error(error.message);
+
+    if (authError || !authData.user) {
+      toast.error(authError?.message || "Login failed");
       return;
     }
+
     toast.success("Logged in successfully!");
-    navigate("/campaigns");
+
+    // Fetch user info from users table to check role & admin
+    const { data: user, error: userError } = await supabase
+      .from("users")
+      .select("*")
+      .eq("email", email)
+      .single();
+
+    if (userError || !user) {
+      toast.error("Failed to fetch user data");
+      return;
+    }
+
+    // Optional: store user in localStorage
+    localStorage.setItem("user", JSON.stringify(user));
+
+    // Redirect based on role
+    if (user.role === "creator") {
+      navigate("/dashboard"); // creator dashboard
+    } else if (user.role === "business") {
+      navigate("/business/dashboard"); // business dashboard
+    } else {
+      toast.error("Invalid role");
+    }
   };
 
   return (

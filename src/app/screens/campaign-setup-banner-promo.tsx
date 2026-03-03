@@ -2,12 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router";
 import { createClient } from "@supabase/supabase-js";
 import { Upload, X } from "lucide-react";
-
-// --- Supabase Setup ---
-const supabaseUrl = "https://YOUR_PROJECT.supabase.co";
-const supabaseKey = "YOUR_PUBLIC_ANON_KEY";
-const supabase = createClient(supabaseUrl, supabaseKey);
-
+import { supabase } from "../lib/supabase"; 
 const partnershipTypes = ["Pay + Code", "Paying", "Code Only", "Open to Offers"];
 const industriesList = ["Health & Fitness", "Gaming", "Food & Drink", "Beauty & Skincare", "Tech & Software", "Fashion", "Beverage", "Home & Decor"];
 

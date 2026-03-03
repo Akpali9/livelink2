@@ -8,8 +8,8 @@ import { AppHeader } from "../components/app-header";
 import { BottomNav } from "../components/bottom-nav";
 
 // Initialize Supabase client
-const supabaseUrl = "https://YOUR_SUPABASE_URL.supabase.co";
-const supabaseKey = "YOUR_SUPABASE_ANON_KEY";
+const supabaseUrl = "https://sivlvqpkgilbpvzuuwzc.supabase.co";
+const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNpdmx2cXBrZ2lsYnB2enV1d3pjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI0NTk2ODcsImV4cCI6MjA4ODAzNTY4N30.bbpOoQOKe7Jyh05tVYNLPv13xjwOYVaGb0sjiH-vgzk";  // Replace with your Supabase Key
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 export function LiveCampaignUpdate() {
@@ -63,23 +63,29 @@ export function LiveCampaignUpdate() {
 
     setUploading(true);
 
-    const fileExt = file.name.split(".").pop();
+    const fileExt = file.name.split(".").pop()?.toLowerCase();
     const fileName = `stream_${selectedStreamId}_${Date.now()}.${fileExt}`;
     const filePath = `${fileName}`;
 
     // Upload to Supabase Storage
-    const { data, error } = await supabase.storage
+    const { data: uploadData, error: uploadError } = await supabase
+      .storage
       .from("stream-proofs")
       .upload(filePath, file, { cacheControl: "3600", upsert: true });
 
-    if (error) {
-      console.error("Upload error:", error.message);
+    if (uploadError) {
+      console.error("Upload error:", uploadError.message);
       setUploading(false);
       return;
     }
 
-    // Get public URL
-    const { publicUrl } = supabase.storage.from("stream-proofs").getPublicUrl(filePath);
+    const publicUrl = uploadData?.publicURL;
+
+    if (!publicUrl) {
+      console.error("Error: Public URL not available after upload.");
+      setUploading(false);
+      return;
+    }
 
     // Update stream record
     const { error: updateError } = await supabase
@@ -87,10 +93,16 @@ export function LiveCampaignUpdate() {
       .update({ proof_url: publicUrl, proof_status: "Submitted" })
       .eq("id", selectedStreamId);
 
-    if (updateError) console.error("Stream update error:", updateError.message);
+    if (updateError) {
+      console.error("Stream update error:", updateError.message);
+      setUploading(false);
+      return;
+    }
 
     // Refresh streams locally
-    setStreams(streams.map(s => s.id === selectedStreamId ? { ...s, proof_url: publicUrl, proof_status: "Submitted", status: "Under Review" } : s));
+    setStreams(streams.map(s => 
+      s.id === selectedStreamId ? { ...s, proof_url: publicUrl, proof_status: "Submitted", status: "Under Review" } : s
+    ));
 
     setUploading(false);
     setIsUploadModalOpen(false);

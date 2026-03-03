@@ -39,21 +39,32 @@ export function Notifications() {
   const backPath = role === "business" ? "/business/dashboard" : "/dashboard";
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState<boolean>(true); // For loading state
+  const [error, setError] = useState<string | null>(null); // For error handling
 
   // Fetch notifications from Supabase
   const fetchNotifications = async () => {
+    setLoading(true);
+    setError(null); // Clear any previous error message
+
     const { data, error } = await supabase
       .from("notifications")
       .select("*")
       .order("time", { ascending: false });
-    if (error) console.error(error);
-    else setNotifications(data);
+
+    if (error) {
+      console.error(error);
+      setError("Failed to load notifications");
+    } else {
+      setNotifications(data);
+    }
+    setLoading(false);
   };
 
   useEffect(() => {
     fetchNotifications();
 
-    // Realtime subscription
+    // Realtime subscription for new notifications
     const channel = supabase
       .channel("notifications")
       .on(
@@ -65,7 +76,9 @@ export function Notifications() {
       )
       .subscribe();
 
-    return () => supabase.removeChannel(channel);
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const unreadCount = notifications.filter((n) => n.unread).length;
@@ -75,8 +88,13 @@ export function Notifications() {
       .from("notifications")
       .update({ unread: false })
       .neq("unread", false);
+
     if (error) console.error(error);
-    else setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })));
+    else {
+      setNotifications((prev) =>
+        prev.map((n) => ({ ...n, unread: false }))
+      );
+    }
   };
 
   const clearAll = async () => {
@@ -90,11 +108,13 @@ export function Notifications() {
       .from("notifications")
       .update({ unread: false })
       .eq("id", id);
+
     if (error) console.error(error);
-    else
+    else {
       setNotifications((prev) =>
         prev.map((n) => (n.id === id ? { ...n, unread: false } : n))
       );
+    }
   };
 
   const getIcon = (type: NotificationType) => {
@@ -125,7 +145,12 @@ export function Notifications() {
     return acc;
   }, {} as Record<string, Notification[]>);
 
-  const groups: Notification["grouping"][] = ["TODAY", "YESTERDAY", "THIS WEEK", "EARLIER"];
+  const groups: Notification["grouping"][] = [
+    "TODAY",
+    "YESTERDAY",
+    "THIS WEEK",
+    "EARLIER"
+  ];
 
   return (
     <div className="flex flex-col min-h-screen bg-white text-[#1D1D1D] pb-[80px]">
@@ -139,7 +164,9 @@ export function Notifications() {
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
-            <h1 className="text-xl font-black uppercase tracking-tighter italic">Notifications</h1>
+            <h1 className="text-xl font-black uppercase tracking-tighter italic">
+              Notifications
+            </h1>
           </div>
           {notifications.length > 0 && (
             <button
@@ -153,7 +180,15 @@ export function Notifications() {
       </header>
 
       <main className="flex-1 max-w-[480px] mx-auto w-full">
-        {notifications.length > 0 ? (
+        {loading ? (
+          <div className="flex items-center justify-center min-h-screen">
+            <p>Loading...</p>
+          </div>
+        ) : error ? (
+          <div className="flex items-center justify-center min-h-screen">
+            <p>{error}</p>
+          </div>
+        ) : notifications.length > 0 ? (
           <>
             {/* Unread Indicator */}
             <div className="flex justify-between items-center px-6 py-4 border-b border-[#1D1D1D]/5">
@@ -172,7 +207,8 @@ export function Notifications() {
             <div className="flex flex-col">
               {groups.map((group) => {
                 const groupNotifications = groupedNotifications[group];
-                if (!groupNotifications || groupNotifications.length === 0) return null;
+                if (!groupNotifications || groupNotifications.length === 0)
+                  return null;
 
                 return (
                   <div key={group} className="flex flex-col">
@@ -211,13 +247,20 @@ export function Notifications() {
                                   {n.title}
                                 </h4>
                                 <span className="text-[9px] font-bold uppercase tracking-widest text-[#1D1D1D]/30 whitespace-nowrap ml-2 italic">
-                                  {new Date(n.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                  {new Date(n.time).toLocaleTimeString([], {
+                                    hour: "2-digit",
+                                    minute: "2-digit"
+                                  })}
                                 </span>
                               </div>
-                              <p className="text-[10px] font-medium text-[#1D1D1D]/50 truncate italic">{n.detail}</p>
+                              <p className="text-[10px] font-medium text-[#1D1D1D]/50 truncate italic">
+                                {n.detail}
+                              </p>
                             </div>
 
-                            {n.unread && <div className="absolute right-6 top-1/2 -translate-y-1/2 w-2 h-2 bg-[#389C9A] rounded-full" />}
+                            {n.unread && (
+                              <div className="absolute right-6 top-1/2 -translate-y-1/2 w-2 h-2 bg-[#389C9A] rounded-full" />
+                            )}
                           </motion.div>
                         ))}
                       </AnimatePresence>
