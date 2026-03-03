@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router";
 import { Home, Search, MessageSquare, User } from "lucide-react";
-import { supabase } from "../lib/supabase"; // Ensure you have a supabase client instance
+import { supabase } from "../lib/supabase";
 
 export function BottomNav() {
   const location = useLocation();
@@ -15,13 +15,12 @@ export function BottomNav() {
   ];
 
   useEffect(() => {
-    // Fetch unread messages count from Supabase
+    // Function to fetch unread messages from PostgreSQL
     const fetchUnreadMessages = async () => {
       const { data, error } = await supabase
         .from("messages")
         .select("id")
-        .eq("read", false);  // Assuming 'read' is a boolean field indicating unread messages
-
+        .eq("seen", false); // 'seen' column tracks unread
       if (error) {
         console.error("Error fetching unread messages:", error);
       } else {
@@ -31,40 +30,48 @@ export function BottomNav() {
 
     fetchUnreadMessages();
 
-    // Optionally, set up real-time listener for new unread messages
+    // Real-time listener for new messages and updates
     const messageListener = supabase
-      .from("messages")
-      .on("INSERT", (payload) => {
-        if (payload.new.read === false) {
-          setUnreadCount((prevCount) => prevCount + 1);
+      .channel("messages-unread")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "messages" },
+        (payload) => {
+          if (payload.eventType === "INSERT" && payload.new.seen === false) {
+            setUnreadCount((prev) => prev + 1);
+          } else if (payload.eventType === "UPDATE") {
+            // Adjust count based on update
+            if (payload.new.seen === true) setUnreadCount((prev) => Math.max(prev - 1, 0));
+            if (payload.new.seen === false) setUnreadCount((prev) => prev + 1);
+          }
         }
-      })
-      .on("UPDATE", (payload) => {
-        if (payload.new.read === true) {
-          setUnreadCount((prevCount) => prevCount - 1);
-        }
-      })
+      )
       .subscribe();
 
-    // Cleanup the listener on component unmount
+    // Cleanup listener on component unmount
     return () => {
-      supabase.removeSubscription(messageListener);
+      supabase.removeChannel(messageListener);
     };
   }, []);
 
   return (
     <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] h-[60px] bg-[#1D1D1D] border-t border-white/10 flex items-center z-50">
       {tabs.map((tab) => {
-        const isActive = location.pathname === tab.path || (tab.path === "/messages" && location.pathname.startsWith("/messages"));
+        const isActive =
+          location.pathname === tab.path ||
+          (tab.path === "/messages" && location.pathname.startsWith("/messages"));
+
         return (
-          <Link 
+          <Link
             key={tab.path}
             to={tab.path}
-            className={`flex-1 flex flex-col items-center justify-center gap-1 transition-colors ${isActive ? "text-[#389C9A]" : "text-white/40"}`}
+            className={`flex-1 flex flex-col items-center justify-center gap-1 transition-colors ${
+              isActive ? "text-[#389C9A]" : "text-white/40"
+            }`}
           >
             <div className="relative">
               <tab.icon className="w-6 h-6" strokeWidth={isActive ? 3 : 2} />
-              {tab.badge && (
+              {tab.badge && tab.badge > 0 && (
                 <div className="absolute -top-1 -right-1 w-4 h-4 bg-[#FEDB71] rounded-full flex items-center justify-center border border-[#1D1D1D]">
                   <span className="text-[9px] font-black text-[#1D1D1D]">{tab.badge}</span>
                 </div>

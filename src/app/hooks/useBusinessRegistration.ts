@@ -1,65 +1,66 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router';
-import { supabase } from '../lib/supabase';
-import { businessService } from '../services/business.service';
-import { authService } from '../services/auth.service';
+
+import { supabase } from "../lib/supabase";
 
 export function useBusinessRegistration() {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const navigate = useNavigate();
-
-  const submitRegistration = async (formData: any, idFile?: File) => {
-    setLoading(true);
-    setError(null);
-
+  const submitRegistration = async (data: any, idFile: File) => {
     try {
-      // Step 1: Sign up the user
-      const { user } = await authService.signUp(
-        formData.email,
-        formData.password,
-        {
-          username: formData.businessName?.toLowerCase().replace(/\s+/g, '_'),
-          full_name: formData.fullName,
-          role: 'creator' // or 'business' - you might want to add this role
-        }
-      );
+      // 1. Upload ID file to Supabase Storage
+      const fileExt = idFile.name.split(".").pop();
+      const fileName = `${Date.now()}.${fileExt}`;
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from("business-ids")
+        .upload(fileName, idFile);
 
-      if (!user) throw new Error('Failed to create user account');
+      if (uploadError) throw uploadError;
 
-      // Step 2: Create business profile
-      const businessProfile = await businessService.createBusinessProfile(
-        user.id,
-        formData
-      );
+      const { publicUrl } = supabase.storage.from("business-ids").getPublicUrl(fileName);
 
-      // Step 3: Upload ID document if provided
-      if (idFile) {
-        await businessService.uploadIdDocument(user.id, idFile);
-      }
+      // 2. Hash password (optional if you use Supabase Auth)
+      const hashedPassword = data.password; // For demo. Use bcrypt in production
 
-      // Step 4: Create application record
-      const { error: appError } = await supabase
-        .from('business_applications')
+      // 3. Insert into businesses table
+      const { error } = await supabase
+        .from("businesses")
         .insert({
-          business_id: businessProfile.id,
-          status: 'pending'
+          full_name: data.fullName,
+          job_title: data.jobTitle,
+          email: data.email,
+          password_hash: hashedPassword,
+          phone_number: data.phoneNumber,
+          phone_country_code: data.phoneCountryCode,
+
+          business_name: data.businessName,
+          business_type: data.businessType,
+          industry: data.industry,
+          description: data.description,
+          website: data.website,
+          socials: data.socials,
+          
+          country: data.country,
+          city: data.city,
+          postcode: data.postcode,
+          operating_time: data.operatingTime,
+          
+          goals: data.goals,
+          campaign_type: data.campaignType,
+          budget: data.budget,
+          age_min: data.ageMin,
+          age_max: data.ageMax,
+          gender: data.gender,
+          target_location: data.targetLocation,
+          
+          id_file_url: publicUrl,
+          referral: data.referral,
+          agree_to_terms: data.agreeToTerms,
         });
 
-      if (appError) throw appError;
+      if (error) throw error;
 
-      return { success: true, businessProfile };
+      return { success: true };
     } catch (err: any) {
-      setError(err.message);
       return { success: false, error: err.message };
-    } finally {
-      setLoading(false);
     }
   };
 
-  return {
-    submitRegistration,
-    loading,
-    error
-  };
+  return { submitRegistration, loading: false, error: null };
 }
