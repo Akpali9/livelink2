@@ -60,6 +60,9 @@ export function useCreatorRegistration() {
 
       console.log('User created successfully:', authData.user.id);
 
+      // Wait a moment for the trigger to create the profile
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
       // 2. Update the creator profile with additional data
       const { error: profileError } = await supabase
         .from('creator_profiles')
