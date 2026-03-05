@@ -1,618 +1,826 @@
-import React, { useState, useRef, useEffect } from "react";
-import { Link, useNavigate } from "react-router";
+import React, { useState } from "react";
+import { useNavigate, Link } from "react-router";
 import { 
-  ArrowUpRight, 
-  Inbox, 
-  Clock, 
-  CheckCircle2, 
-  Check, 
+  ChevronLeft, 
+  ChevronRight, 
+  Plus, 
   X, 
-  ChevronDown, 
-  ChevronUp,
-  Wallet,
-  User,
-  List,
-  Loader2,
-  AlertCircle,
+  Eye, 
+  EyeOff, 
+  ShieldCheck, 
+  Upload, 
+  CheckCircle2, 
+  Instagram, 
+  Youtube, 
+  Facebook, 
+  MessageSquare,
+  ArrowRight,
+  Info,
+  Calendar,
+  Monitor,
+  Video as VideoIcon,
+  ExternalLink,
+  Lock,
+  Mail,
+  Smartphone
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { toast, Toaster } from "sonner";
-import { ImageWithFallback } from "../components/figma/ImageWithFallback";
-import { BottomNav } from "../components/bottom-nav";
+import { useForm, useFieldArray } from "react-hook-form";
 import { AppHeader } from "../components/app-header";
-import { DeclineOfferModal } from "../components/decline-offer-modal";
-import { supabase } from "../lib/supabase";
-import { useDashboardData } from "../hooks/useDashboardData";
-import type { IncomingRequest } from "../types/dashboard";
+import { toast, Toaster } from "sonner";
 
-function SectionSkeleton({ rows = 2 }: { rows?: number }) {
-  return (
-    <div className="flex flex-col gap-3 animate-pulse">
-      {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="h-24 bg-[#1D1D1D]/5 border-2 border-[#1D1D1D]/5" />
-      ))}
-    </div>
-  );
-}
+type CreatorFormData = {
+  // Step 1
+  fullName: string;
+  dob: string;
+  email: string;
+  password: "";
+  confirmPassword: "";
+  phoneNumber: string;
+  country: string;
+  city: string;
+  // Step 2
+  platforms: { type: string; username: string; url: string }[];
+  // Step 3
+  frequency: string;
+  duration: string;
+  days: string[];
+  timeOfDay: string;
+  avgConcurrent: string;
+  avgPeak: string;
+  avgWeekly: string;
+  categories: string[];
+  audienceBio: string;
+  // Step 4
+  referral: string;
+  // Terms agreement
+  termsAgreed: boolean;
+};
 
-function SectionError({ message, onRetry }: { message: string; onRetry: () => void }) {
-  return (
-    <div className="border-2 border-red-200 bg-red-50 p-4 flex items-center justify-between">
-      <div className="flex items-center gap-2 text-red-500 text-[10px] font-bold uppercase tracking-widest">
-        <AlertCircle className="w-4 h-4" /> {message}
-      </div>
-      <button
-        onClick={onRetry}
-        className="text-[9px] font-black uppercase tracking-widest text-red-500 underline italic"
-      >
-        Retry
-      </button>
-    </div>
-  );
-}
-
-export function Dashboard() {
+export function BecomeCreator() {
   const navigate = useNavigate();
-  const earningsRef = useRef<HTMLDivElement>(null);
-  const [creatorId, setCreatorId] = useState<string | null>(null);
-  const [authChecked, setAuthChecked] = useState(false);
-  const [requestsExpanded, setRequestsExpanded] = useState(false);
-  const [applicationsExpanded, setApplicationsExpanded] = useState(false);
-  const [isDeclineModalOpen, setIsDeclineModalOpen] = useState(false);
-  const [selectedRequest, setSelectedRequest] = useState<IncomingRequest | null>(null);
+  const [step, setStep] = useState(1);
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
-  // Get current user
-  useEffect(() => {
-    const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        setCreatorId(user.id);
-      }
-      setAuthChecked(true);
-    };
-    getUser();
+  const { register, handleSubmit, watch, control, formState: { errors, isValid } } = useForm<CreatorFormData>({
+    defaultValues: {
+      platforms: [{ type: "Twitch", username: "", url: "" }],
+      days: [],
+      categories: [],
+      termsAgreed: false
+    },
+    mode: "onChange"
+  });
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        setCreatorId(session.user.id);
-      } else {
-        setCreatorId(null);
-      }
-    });
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: "platforms"
+  });
 
-    return () => subscription.unsubscribe();
-  }, []);
+  const password = watch("password");
+  const dob = watch("dob");
+  const termsAgreed = watch("termsAgreed");
 
-  // Fetch dashboard data
-  const {
-    profile,
-    statusCounts,
-    incomingRequests,
-    setIncomingRequests,
-    liveCampaign,
-    applications,
-    upcomingCampaigns,
-    loading,
-    errors,
-    refetch,
-  } = useDashboardData(creatorId);
+  const getPasswordStrength = () => {
+    if (!password) return null;
+    if (password.length < 6) return { label: "Weak", color: "text-red-500" };
+    if (password.length < 10) return { label: "Fair", color: "text-[#FEDB71]" };
+    return { label: "Strong", color: "text-[#389C9A]" };
+  };
 
-  // Redirect if not authenticated
-  useEffect(() => {
-    if (authChecked && !creatorId) {
-      navigate('/login');
+  const isUnder18 = () => {
+    if (!dob) return false;
+    const birthDate = new Date(dob);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
     }
-  }, [authChecked, creatorId, navigate]);
+    return age < 18;
+  };
 
-  // Actions
-  const handleAccept = async (req: IncomingRequest) => {
-    const { error } = await supabase
-      .from("campaign_requests")
-      .update({ status: "accepted" })
-      .eq("id", req.id);
-
-    if (error) {
-      toast.error("Could not accept offer. Please try again.");
+  const onSubmit = (data: CreatorFormData) => {
+    if (!data.termsAgreed) {
+      toast.error("Please agree to the Terms of Service and Privacy Policy");
       return;
     }
-
-    setIncomingRequests(prev => prev.filter(r => r.id !== req.id));
-    toast.success(`You accepted the offer from ${req.business}!`);
-    navigate("/gig-accepted");
+    
+    console.log("Form Data:", data);
+    setIsSubmitted(true);
+    window.scrollTo(0, 0);
+    toast.success("Application submitted successfully!");
   };
 
-  const handleDeclineClick = (req: IncomingRequest) => {
-    setSelectedRequest(req);
-    setIsDeclineModalOpen(true);
-  };
-
-  const handleConfirmDecline = async (reason: string) => {
-    if (!selectedRequest) return;
-
-    const { error } = await supabase
-      .from("campaign_requests")
-      .update({ status: "declined", decline_reason: reason })
-      .eq("id", selectedRequest.id);
-
-    setIsDeclineModalOpen(false);
-
-    if (error) {
-      toast.error("Could not decline offer. Please try again.");
+  const nextStep = () => {
+    if (step === 5 && !termsAgreed) {
+      toast.error("Please agree to the terms to continue");
       return;
     }
-
-    toast.success(`Offer declined. ${selectedRequest.business} has been notified.`);
-    setIncomingRequests(prev => prev.filter(r => r.id !== selectedRequest.id));
-    setSelectedRequest(null);
+    setStep(s => Math.min(s + 1, 5));
   };
+  
+  const prevStep = () => setStep(s => Math.max(s - 1, 1));
 
-  const earningsRatio = profile
-    ? (profile.paid_out / (profile.total_earned || 1)) * 100
-    : 0;
-
-  if (loading || !authChecked) {
+  if (isSubmitted) {
     return (
-      <div className="flex flex-col min-h-screen bg-white items-center justify-center gap-3">
-        <Loader2 className="w-6 h-6 animate-spin text-[#389C9A]" />
-        <p className="text-[10px] font-black uppercase tracking-widest text-[#1D1D1D]/40">
-          Loading your dashboard…
-        </p>
+      <div className="flex flex-col min-h-screen bg-white items-center justify-center px-8 text-[#1D1D1D]">
+        <Toaster position="top-center" richColors />
+        <motion.div 
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className="text-center max-w-md"
+        >
+          <div className="w-24 h-24 bg-[#1D1D1D] rounded-none flex items-center justify-center mx-auto mb-8 border-2 border-[#FEDB71]">
+            <CheckCircle2 className="w-12 h-12 text-[#389C9A]" />
+          </div>
+          <h1 className="text-4xl font-black uppercase tracking-tighter italic mb-4">Application Submitted!</h1>
+          <p className="text-[#1D1D1D]/60 mb-12 italic">
+            Thank you for applying to join LiveLink as a creator. Our team will review your application and get back to you within 48 hours via the email address you provided.
+          </p>
+
+          <div className="mb-12">
+            <h3 className="text-[10px] font-black uppercase tracking-[0.3em] mb-8 opacity-40 italic">What happens next</h3>
+            <div className="relative flex flex-col gap-8 text-left">
+              {[
+                { step: "01", text: "Our team reviews your application and uploaded documents" },
+                { step: "02", text: "You receive an approval or feedback email within 48 hours" },
+                { step: "03", text: "Once approved, you get instant access to your creator dashboard" }
+              ].map((item, i) => (
+                <div key={i} className="flex gap-4 items-start">
+                  <span className="font-black italic text-[#389C9A]">{item.step}</span>
+                  <p className="text-sm font-bold uppercase tracking-tight italic">{item.text}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <p className="text-[10px] font-black uppercase tracking-widest mb-4 italic text-[#1D1D1D]/40">While you wait, follow us</p>
+          <div className="flex justify-center gap-6 mb-12 text-[#389C9A]">
+            <Instagram className="w-6 h-6" />
+            <Youtube className="w-6 h-6" />
+            <Facebook className="w-6 h-6" />
+            <MessageSquare className="w-6 h-6" />
+          </div>
+
+          <Link to="/" className="inline-block border-2 border-[#1D1D1D] px-8 py-4 text-[10px] font-black uppercase tracking-widest hover:bg-[#1D1D1D] hover:text-white transition-all mb-8 italic">
+            Back to Home
+          </Link>
+          <p className="text-[9px] font-medium opacity-40 uppercase tracking-widest">
+            Have a question? Contact us at support@livelink.com
+          </p>
+        </motion.div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-white text-[#1D1D1D] pb-[60px]">
-      <AppHeader showLogo subtitle="Creator Hub" />
+    <div className="flex flex-col min-h-screen bg-white pb-32 text-[#1D1D1D]">
       <Toaster position="top-center" richColors />
-
-      <main className="max-w-[480px] mx-auto w-full">
-        {/* Section 1 — Earnings Card */}
-        <div className="p-6" ref={earningsRef}>
-          {errors.profile ? (
-            <SectionError message={errors.profile} onRetry={refetch} />
-          ) : (
-            <div className="bg-[#1D1D1D] p-8 text-white relative overflow-hidden border-2 border-[#1D1D1D]">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/50">
-                  Total Earnings
-                </span>
-                <button className="p-1">
-                  <ArrowUpRight className="w-4 h-4 text-white/40" />
-                </button>
-              </div>
-              <h2 className="text-4xl font-black tracking-tighter leading-none mb-8 text-center italic">
-                ₦{(profile?.total_earned ?? 0).toLocaleString()}
-              </h2>
-
-              <div className="h-[1px] bg-white/10 mb-8" />
-
-              <div className="grid grid-cols-2 gap-8 mb-8">
-                <div className="flex flex-col gap-1">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">
-                    Pending
-                  </span>
-                  <span className="text-xl font-bold text-[#FEDB71]">
-                    ₦{(profile?.pending ?? 0).toLocaleString()}
-                  </span>
-                </div>
-                <div className="flex flex-col gap-1 text-right">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">
-                    Paid Out
-                  </span>
-                  <span className="text-xl font-bold text-[#389C9A]">
-                    ₦{(profile?.paid_out ?? 0).toLocaleString()}
-                  </span>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <div className="h-1 bg-white/10 w-full rounded-none overflow-hidden">
-                  <div
-                    className="h-full bg-[#389C9A] transition-all duration-1000"
-                    style={{ width: `${earningsRatio}%` }}
-                  />
-                </div>
-                <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest">
-                  {Math.round(earningsRatio)}% of earnings paid out
-                </p>
-              </div>
-            </div>
-          )}
+      
+      {/* Header */}
+      <div className="px-8 pt-12 pb-8 border-b-2 border-[#1D1D1D]">
+        <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest mb-6 opacity-40 italic">
+          <ChevronLeft className="w-4 h-4 text-[#1D1D1D]" /> Back
+        </button>
+        <h1 className="text-4xl font-black uppercase tracking-tighter italic leading-tight mb-2">
+          Become a Creator on LiveLink
+        </h1>
+        <p className="text-[#1D1D1D]/60 text-sm font-medium mb-6 italic">
+          Join hundreds of live creators already earning through their streams. Fill in your details below and our team will review your application within 48 hours.
+        </p>
+        <div className="bg-[#FEDB71]/10 border border-[#FEDB71] p-4 flex gap-3">
+          <Info className="w-5 h-5 flex-shrink-0 text-[#389C9A]" />
+          <p className="text-[10px] font-bold uppercase tracking-widest leading-relaxed">
+            All creator accounts are manually reviewed and approved by our team. Incomplete applications will not be reviewed.
+          </p>
         </div>
+      </div>
 
-        {/* Section 2 — Primary CTA */}
-        <div className="px-6 pb-6">
-          <Link
-            to="/browse-businesses"
-            className="w-full bg-[#1D1D1D] text-white py-8 px-8 text-xl font-black uppercase italic tracking-tighter flex items-center justify-between active:scale-[0.98] transition-all"
-          >
-            Browse Opportunities
-            <ArrowUpRight className="w-6 h-6" />
-          </Link>
-        </div>
-
-        {/* Section 3 — Campaign Status Row */}
-        <div className="px-6 pb-12">
-          {errors.counts ? (
-            <SectionError message={errors.counts} onRetry={refetch} />
-          ) : (
-            <div className="grid grid-cols-3 gap-3">
-              {[
-                { icon: Inbox, count: statusCounts?.requested ?? 0, label: "Requested" },
-                { icon: Clock, count: statusCounts?.pending ?? 0, label: "Pending" },
-                { icon: CheckCircle2, count: statusCounts?.completed ?? 0, label: "Completed" },
-              ].map((card, i) => (
-                <button
-                  key={i}
-                  onClick={() => navigate("/campaigns")}
-                  className="bg-white border-2 border-[#1D1D1D] p-4 flex flex-col items-center gap-2 active:bg-[#1D1D1D] active:text-white transition-all cursor-pointer"
-                >
-                  <card.icon className="w-4 h-4 text-[#389C9A]" />
-                  <span className="text-xl font-black italic">{card.count}</span>
-                  <span className="text-[7px] font-black uppercase tracking-widest text-center leading-tight opacity-40">
-                    {card.label}
-                  </span>
-                </button>
-              ))}
+      {/* Progress */}
+      <div className="px-8 py-6 bg-[#F8F8F8] border-b border-[#1D1D1D]/10 sticky top-[84px] z-30 flex justify-between items-center overflow-x-auto whitespace-nowrap gap-4 scrollbar-hide">
+        {[1, 2, 3, 4, 5].map(s => (
+          <div key={s} className="flex items-center gap-2">
+            <div className={`w-8 h-8 flex items-center justify-center text-[10px] font-black transition-all rounded-none border-2 ${step === s ? 'bg-[#1D1D1D] text-white border-[#1D1D1D]' : 'bg-white text-[#1D1D1D]/30 border-[#1D1D1D]/10'}`}>
+              {s}
             </div>
-          )}
-        </div>
-
-        {/* Section 4 — Incoming Requests */}
-        <div className="px-6 pb-12">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-[#1D1D1D]/40">
-              Incoming Requests
-            </h3>
-            <span className="bg-[#FEDB71] text-[#1D1D1D] text-[9px] font-black uppercase px-2 py-0.5 tracking-widest italic">
-              {incomingRequests.length} new
-            </span>
-          </div>
-
-          {errors.requests ? (
-            <SectionError message={errors.requests} onRetry={refetch} />
-          ) : incomingRequests.length === 0 ? (
-            <div className="border-2 border-[#1D1D1D]/10 p-8 text-center">
-              <p className="text-xs text-[#1D1D1D]/40">No incoming requests right now.</p>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-4">
-              <AnimatePresence mode="popLayout">
-                {(requestsExpanded ? incomingRequests : incomingRequests.slice(0, 2)).map(req => (
-                  <motion.div
-                    layout
-                    key={req.id}
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.8 }}
-                    transition={{ duration: 0.3 }}
-                    className="bg-white border-2 border-[#1D1D1D] p-6 flex flex-col gap-6"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-4">
-                        <ImageWithFallback 
-                          src={req.logo || ''} 
-                          className="w-12 h-12 border border-[#1D1D1D]/10 grayscale object-cover" 
-                        />
-                        <div>
-                          <h4 className="font-black text-lg uppercase tracking-tight leading-none mb-1">
-                            {req.business}
-                          </h4>
-                          <p className="text-[10px] font-bold text-[#1D1D1D]/40 uppercase tracking-widest">
-                            {req.type}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex flex-col items-end">
-                        <p className="text-2xl font-black italic leading-none mb-2 text-[#389C9A]">
-                          ₦{req.price.toLocaleString()}
-                        </p>
-                        <div className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 flex items-center gap-1.5 ${
-                          req.days_left <= 1 ? "bg-red-100 text-red-600 border border-red-200" :
-                          req.days_left <= 2 ? "bg-orange-100 text-orange-600 border border-orange-200" :
-                          "bg-[#FEDB71]/10 text-[#FEDB71] border border-[#FEDB71]/20"
-                        }`}>
-                          <Clock className="w-2.5 h-2.5" /> {req.days_left} days left
-                        </div>
-                      </div>
-                    </div>
-
-                    <p className="text-[10px] font-medium text-[#1D1D1D]/60 italic">
-                      {req.name} — {req.streams} streams
-                    </p>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <button
-                        onClick={() => handleAccept(req)}
-                        className="bg-[#1D1D1D] text-white py-4 font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all"
-                      >
-                        <Check className="w-4 h-4 text-[#389C9A]" /> Accept
-                      </button>
-                      <button
-                        onClick={() => handleDeclineClick(req)}
-                        className="border-2 py-4 font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 transition-all border-[#1D1D1D] text-[#1D1D1D] active:scale-95"
-                      >
-                        <X className="w-4 h-4" /> Reject
-                      </button>
-                    </div>
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-
-              {incomingRequests.length > 2 && (
-                <button
-                  onClick={() => setRequestsExpanded(!requestsExpanded)}
-                  className="w-full py-4 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 text-[#1D1D1D]/40 hover:text-[#1D1D1D] transition-colors"
-                >
-                  {requestsExpanded ? (
-                    <>Show less <ChevronUp className="w-4 h-4" /></>
-                  ) : (
-                    <>Show {incomingRequests.length - 2} more <ChevronDown className="w-4 h-4" /></>
-                  )}
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Section 5 — Live Now */}
-        <div className="px-6 pb-12">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-[#1D1D1D]/40">
-              Live Now
-            </h3>
-            {liveCampaign && (
-              <div className="flex items-center gap-2 text-[10px] font-black uppercase text-[#1D1D1D]">
-                <span className="w-1.5 h-1.5 bg-[#389C9A] rounded-full animate-pulse" />
-                Active
-              </div>
+            {step === s && (
+              <span className="text-[10px] font-black uppercase tracking-widest italic">
+                {s === 1 ? "Personal" : s === 2 ? "Presence" : s === 3 ? "Activity" : s === 4 ? "Proof" : "Final"}
+              </span>
             )}
           </div>
+        ))}
+      </div>
 
-          {errors.live ? (
-            <SectionError message={errors.live} onRetry={refetch} />
-          ) : liveCampaign ? (
-            <div className="bg-[#1D1D1D] p-6 flex flex-col gap-6 relative overflow-hidden border-2 border-[#1D1D1D]">
-              <div className="flex items-center gap-6 relative z-10">
-                <ImageWithFallback 
-                  src={liveCampaign.logo || ''} 
-                  className="w-12 h-12 border border-white/20 grayscale object-cover" 
-                />
-                <div className="flex-1 text-white">
-                  <h4 className="font-black text-lg uppercase tracking-tight leading-none mb-1">
-                    {liveCampaign.business}
-                  </h4>
-                  <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">
-                    {liveCampaign.name}
-                  </p>
-                </div>
-                <div className="text-right text-white">
-                  <p className="text-xl font-black italic leading-none mb-1 text-[#FEDB71]">
-                    ₦{liveCampaign.session_earnings.toLocaleString()}
-                  </p>
-                  <p className="text-[10px] font-black text-[#389C9A] uppercase tracking-widest italic">
-                    {liveCampaign.stream_time}
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-2 relative z-10">
-                <div className="h-1 bg-white/10 w-full rounded-none overflow-hidden">
-                  <div 
-                    className="h-full bg-[#389C9A]" 
-                    style={{ width: `${liveCampaign.progress}%` }} 
+      <div className="px-8 mt-12 max-w-[600px] mx-auto w-full flex-1">
+        {step === 1 && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-12">
+            <section>
+              <h2 className="text-2xl font-black uppercase tracking-tight italic mb-2">About You</h2>
+              <p className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-8 italic">This information is kept private and is only used for verification purposes.</p>
+              
+              <div className="flex flex-col gap-6">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest italic text-[#1D1D1D]/40">Full Legal Name</label>
+                  <input 
+                    {...register("fullName", { required: true })}
+                    placeholder="As it appears on your ID"
+                    className="w-full bg-[#F8F8F8] border border-[#1D1D1D]/10 p-5 text-sm font-bold uppercase tracking-tight outline-none focus:border-[#1D1D1D] transition-all rounded-none italic"
                   />
                 </div>
-                <p className="text-[9px] font-bold text-white/30 uppercase tracking-widest">
-                  {liveCampaign.remaining_mins} mins to qualify
-                </p>
-              </div>
 
-              <div className="pt-4 border-t border-white/10 flex justify-end relative z-10">
-                <Link
-                  to={`/campaign/live-update/${liveCampaign.id}`}
-                  className="text-[10px] font-black uppercase tracking-widest text-white flex items-center gap-2 group hover:gap-3 transition-all italic"
-                >
-                  Update Campaign <ArrowUpRight className="w-3.5 h-3.5 group-hover:scale-110 transition-all text-[#FEDB71]" />
-                </Link>
-              </div>
-            </div>
-          ) : (
-            <div className="bg-white border-2 border-[#1D1D1D] p-12 text-center">
-              <p className="text-xs text-[#1D1D1D]/40 mb-4">
-                No active campaign running right now.
-              </p>
-              <Link 
-                to="/campaigns" 
-                className="text-[10px] font-black uppercase tracking-widest text-[#1D1D1D] underline italic"
-              >
-                View Campaigns →
-              </Link>
-            </div>
-          )}
-        </div>
-
-        {/* Section 6 — My Applications */}
-        <div className="px-6 pb-12">
-          <div className="flex items-center justify-between mb-1">
-            <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-[#1D1D1D]/40">
-              My Applications
-            </h3>
-            <span className="text-[9px] font-black uppercase text-[#1D1D1D]/40">
-              {applications.length} total
-            </span>
-          </div>
-          <p className="text-[9px] font-bold text-[#1D1D1D]/40 uppercase tracking-widest mb-6">
-            Businesses you have applied to
-          </p>
-
-          {errors.applications ? (
-            <SectionError message={errors.applications} onRetry={refetch} />
-          ) : (
-            <div className="flex flex-col gap-3">
-              {(applicationsExpanded ? applications : applications.slice(0, 3)).map(app => (
-                <div 
-                  key={app.id} 
-                  className="bg-[#F8F8F8] border border-[#1D1D1D]/10 p-4 flex items-center justify-between"
-                >
-                  <div className="flex items-center gap-4">
-                    <ImageWithFallback 
-                      src={app.logo || ''} 
-                      className="w-10 h-10 border border-[#1D1D1D]/10 grayscale object-cover" 
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest italic text-[#1D1D1D]/40">Date of Birth</label>
+                  <div className="relative">
+                    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 opacity-30 text-[#389C9A]" />
+                    <input 
+                      type="date"
+                      {...register("dob", { required: true })}
+                      className="w-full bg-[#F8F8F8] border border-[#1D1D1D]/10 p-5 pl-12 text-sm font-bold uppercase tracking-tight outline-none focus:border-[#1D1D1D] transition-all rounded-none"
                     />
-                    <div>
-                      <h4 className="font-black text-xs uppercase tracking-tight mb-1">{app.business}</h4>
-                      <span className="text-[8px] font-black uppercase tracking-widest bg-[#1D1D1D]/5 px-1.5 py-0.5">
-                        {app.type}
-                      </span>
+                  </div>
+                  {isUnder18() && (
+                    <p className="text-[9px] font-black uppercase text-red-500 mt-1">You must be 18 or over to join LiveLink as a creator.</p>
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest italic text-[#1D1D1D]/40">Email Address</label>
+                  <div className="relative">
+                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 opacity-30 text-[#389C9A]" />
+                    <input 
+                      type="email"
+                      {...register("email", { required: true })}
+                      placeholder="This will be your login email"
+                      className="w-full bg-[#F8F8F8] border border-[#1D1D1D]/10 p-5 pl-12 text-sm font-bold uppercase tracking-tight outline-none focus:border-[#1D1D1D] transition-all rounded-none italic"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-black uppercase tracking-widest italic text-[#1D1D1D]/40">Create Password</label>
+                    <div className="relative">
+                      <input 
+                        type={showPassword ? "text" : "password"}
+                        {...register("password", { required: true, minLength: 6 })}
+                        className="w-full bg-[#F8F8F8] border border-[#1D1D1D]/10 p-5 text-sm font-bold uppercase tracking-tight outline-none focus:border-[#1D1D1D] transition-all rounded-none"
+                      />
+                      <button 
+                        type="button" 
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2"
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4 opacity-30" /> : <Eye className="w-4 h-4 opacity-30" />}
+                      </button>
+                    </div>
+                    {getPasswordStrength() && (
+                      <p className={`text-[9px] font-black uppercase mt-1 ${getPasswordStrength()?.color}`}>
+                        Strength: {getPasswordStrength()?.label}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-black uppercase tracking-widest italic text-[#1D1D1D]/40">Confirm Password</label>
+                    <input 
+                      type="password"
+                      {...register("confirmPassword", { required: true })}
+                      className="w-full bg-[#F8F8F8] border border-[#1D1D1D]/10 p-5 text-sm font-bold uppercase tracking-tight outline-none focus:border-[#1D1D1D] transition-all rounded-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest italic text-[#1D1D1D]/40">Phone Number</label>
+                  <div className="relative flex">
+                    <select className="bg-white border border-[#1D1D1D]/10 p-5 text-xs font-black uppercase tracking-tight outline-none border-r-0 rounded-none">
+                      <option value="+234">+234</option>
+                      <option value="+263">+263</option>
+                      <option value="+27">+27</option>
+                      <option value="+233">+233</option>
+                    </select>
+                    <div className="relative flex-1">
+                      <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 opacity-30 text-[#389C9A]" />
+                      <input 
+                        type="tel"
+                        {...register("phoneNumber", { required: true })}
+                        className="w-full bg-[#F8F8F8] border border-[#1D1D1D]/10 p-5 pl-12 text-sm font-bold uppercase tracking-tight outline-none focus:border-[#1D1D1D] transition-all rounded-none"
+                      />
                     </div>
                   </div>
-                  <div className="text-right">
-                    {app.amount !== undefined && (
-                      <p className="text-sm font-black italic mb-1 text-[#389C9A]">₦{app.amount}</p>
-                    )}
-                    <div className={`text-[8px] font-black uppercase tracking-widest px-2 py-0.5 ${
-                      app.status === 'pending' ? "text-[#FEDB71]" :
-                      app.status === 'under_review' ? "text-blue-500" :
-                      app.status === 'accepted' ? "text-[#389C9A]" : "text-[#1D1D1D]/30"
-                    }`}>
-                      {app.status.replace('_', ' ')}
+                  <p className="text-[9px] font-medium opacity-40 mt-1 italic">Used for account security and important notifications only.</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-black uppercase tracking-widest italic text-[#1D1D1D]/40">Country</label>
+                    <select 
+                      {...register("country", { required: true })}
+                      className="w-full bg-white border border-[#1D1D1D]/10 p-5 text-xs font-black uppercase tracking-tight outline-none rounded-none"
+                    >
+                      <option value="">Select Country</option>
+                      <option value="Nigeria">Nigeria</option>
+                      <option value="Zimbabwe">Zimbabwe</option>
+                      <option value="South Africa">South Africa</option>
+                      <option value="Ghana">Ghana</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-black uppercase tracking-widest italic text-[#1D1D1D]/40">City</label>
+                    <input 
+                      {...register("city", { required: true })}
+                      className="w-full bg-[#F8F8F8] border border-[#1D1D1D]/10 p-5 text-sm font-bold uppercase tracking-tight outline-none focus:border-[#1D1D1D] transition-all rounded-none italic"
+                    />
+                  </div>
+                </div>
+              </div>
+            </section>
+          </motion.div>
+        )}
+
+        {step === 2 && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-12">
+            <section>
+              <h2 className="text-2xl font-black uppercase tracking-tight italic mb-2">Your Streaming Presence</h2>
+              <p className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-8 italic">Tell us where you go live. Add at least one platform to continue.</p>
+
+              <div className="flex flex-col gap-8">
+                {fields.map((field, index) => (
+                  <div key={field.id} className="relative p-8 border-2 border-[#1D1D1D] bg-white rounded-none">
+                    <div className="flex items-center justify-between mb-8">
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#389C9A]">Platform {index + 1}</span>
+                      {fields.length > 1 && (
+                        <button onClick={() => remove(index)} className="p-2 hover:bg-red-50 text-red-500 transition-colors">
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
-                    <p className="text-[7px] font-bold text-[#1D1D1D]/20 uppercase tracking-widest italic">
-                      {new Date(app.applied_at).toLocaleDateString()}
+                    
+                    <div className="flex flex-col gap-6">
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[10px] font-black uppercase tracking-widest italic text-[#1D1D1D]/40">Platform</label>
+                        <select 
+                          {...register(`platforms.${index}.type` as const)}
+                          className="w-full bg-[#F8F8F8] border border-[#1D1D1D]/10 p-5 text-xs font-black uppercase tracking-tight outline-none rounded-none"
+                        >
+                          <option>TikTok</option>
+                          <option>Instagram</option>
+                          <option>Facebook</option>
+                          <option>YouTube</option>
+                          <option>Twitch</option>
+                          <option>Kick</option>
+                          <option>Other</option>
+                        </select>
+                      </div>
+
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[10px] font-black uppercase tracking-widest italic text-[#1D1D1D]/40">Username / Channel Name</label>
+                        <input 
+                          {...register(`platforms.${index}.username` as const, { required: true })}
+                          placeholder="e.g. @creatorname"
+                          className="w-full bg-[#F8F8F8] border border-[#1D1D1D]/10 p-5 text-sm font-bold uppercase tracking-tight outline-none focus:border-[#1D1D1D] rounded-none italic"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[10px] font-black uppercase tracking-widest italic text-[#1D1D1D]/40">Profile URL</label>
+                        <input 
+                          {...register(`platforms.${index}.url` as const, { required: true })}
+                          placeholder="Paste a direct link to your profile or channel"
+                          className="w-full bg-[#F8F8F8] border border-[#1D1D1D]/10 p-5 text-sm font-bold uppercase tracking-tight outline-none focus:border-[#1D1D1D] rounded-none italic"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {fields.length < 5 && (
+                  <button 
+                    onClick={() => append({ type: "Twitch", username: "", url: "" })}
+                    className="w-full border-2 border-dashed border-[#1D1D1D]/20 p-8 flex flex-col items-center gap-2 hover:border-[#1D1D1D] transition-all text-[#1D1D1D]/40 hover:text-[#1D1D1D] rounded-none group"
+                  >
+                    <Plus className="w-6 h-6 text-[#389C9A]" />
+                    <span className="text-[10px] font-black uppercase tracking-widest italic">Add Another Platform</span>
+                  </button>
+                )}
+              </div>
+            </section>
+          </motion.div>
+        )}
+
+        {step === 3 && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-16">
+            <section>
+              <h2 className="text-2xl font-black uppercase tracking-tight italic mb-2">Your Live Streaming Habits</h2>
+              <p className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-12 italic">Be as accurate as possible. This information determines which campaigns you are matched with and what you earn.</p>
+
+              <div className="flex flex-col gap-12">
+                {/* Frequency */}
+                <div className="flex flex-col gap-6">
+                  <label className="text-[10px] font-black uppercase tracking-widest italic">How often do you go live?</label>
+                  <div className="flex flex-col gap-3">
+                    {[
+                      { val: "Daily", sub: "I go live every day" },
+                      { val: "Several times a week", sub: "I go live 3 to 5 times per week" },
+                      { val: "Weekly", sub: "I go live once a week" },
+                      { val: "A few times a month", sub: "I go live 2 to 3 times per month" },
+                      { val: "Monthly or less", sub: "I go live once a month or occasionally" }
+                    ].map(opt => (
+                      <label key={opt.val} className="relative group cursor-pointer">
+                        <input type="radio" {...register("frequency")} value={opt.val} className="peer hidden" />
+                        <div className="p-6 border-2 border-[#1D1D1D]/10 bg-white peer-checked:bg-[#1D1D1D] peer-checked:text-white peer-checked:border-[#1D1D1D] transition-all rounded-none">
+                          <p className="text-[11px] font-black uppercase tracking-widest mb-1 italic">{opt.val}</p>
+                          <p className="text-[9px] font-medium uppercase tracking-widest opacity-40 peer-checked:opacity-60 italic">{opt.sub}</p>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Duration */}
+                <div className="flex flex-col gap-6">
+                  <label className="text-[10px] font-black uppercase tracking-widest italic">How long are your live streams on average?</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {[
+                      "Under 30 minutes",
+                      "30 to 45 minutes",
+                      "45 minutes to 1 hour",
+                      "1 to 2 hours",
+                      "Over 2 hours"
+                    ].map(opt => (
+                      <label key={opt} className="relative cursor-pointer">
+                        <input type="radio" {...register("duration")} value={opt} className="peer hidden" />
+                        <div className="p-6 border-2 border-[#1D1D1D]/10 bg-white peer-checked:bg-[#1D1D1D] peer-checked:text-white peer-checked:border-[#1D1D1D] transition-all text-center rounded-none italic">
+                          <p className="text-[10px] font-black uppercase tracking-widest">{opt}</p>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="bg-[#FEDB71]/10 border border-[#FEDB71] p-4 text-[9px] font-black uppercase tracking-widest text-[#1D1D1D] text-center italic">
+                    Note: only streams of 45 minutes or longer qualify for banner campaign billing.
+                  </div>
+                </div>
+
+                {/* Days and Time */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                  <div className="flex flex-col gap-6">
+                    <label className="text-[10px] font-black uppercase tracking-widest italic">Days you go live</label>
+                    <div className="flex flex-wrap gap-2">
+                      {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(day => (
+                        <label key={day} className="cursor-pointer">
+                          <input type="checkbox" {...register("days")} value={day} className="peer hidden" />
+                          <div className="w-12 h-12 flex items-center justify-center border-2 border-[#1D1D1D]/10 bg-white peer-checked:bg-[#389C9A] peer-checked:text-white peer-checked:border-[#389C9A] text-[10px] font-black transition-all rounded-none italic">
+                            {day[0]}
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-6">
+                    <label className="text-[10px] font-black uppercase tracking-widest italic text-[#1D1D1D]/40">Typical Time</label>
+                    <select 
+                      {...register("timeOfDay")}
+                      className="w-full bg-white border-2 border-[#1D1D1D]/10 p-5 text-xs font-black uppercase tracking-tight outline-none rounded-none italic"
+                    >
+                      <option>Morning (6am–12pm)</option>
+                      <option>Afternoon (12pm–5pm)</option>
+                      <option>Evening (5pm–9pm)</option>
+                      <option>Late Night (9pm–12am)</option>
+                      <option>Varies</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Viewership */}
+                <div className="flex flex-col gap-8">
+                  <label className="text-[10px] font-black uppercase tracking-widest italic">Average Viewership</label>
+                  <div className="flex flex-col gap-8">
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center gap-4">
+                        <span className="w-8 h-8 flex items-center justify-center bg-[#1D1D1D] text-white text-[10px] font-black italic">1</span>
+                        <input 
+                          type="number"
+                          {...register("avgConcurrent")}
+                          placeholder="e.g. 250"
+                          className="flex-1 bg-[#F8F8F8] border border-[#1D1D1D]/10 p-5 text-sm font-bold uppercase outline-none rounded-none italic focus:border-[#1D1D1D] transition-all"
+                        />
+                      </div>
+                      <p className="text-[9px] font-medium opacity-40 ml-12 italic uppercase tracking-widest">Average concurrent viewers per stream</p>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center gap-4">
+                        <span className="w-8 h-8 flex items-center justify-center bg-[#1D1D1D] text-white text-[10px] font-black italic">2</span>
+                        <input 
+                          type="number"
+                          {...register("avgPeak")}
+                          placeholder="e.g. 500"
+                          className="flex-1 bg-[#F8F8F8] border border-[#1D1D1D]/10 p-5 text-sm font-bold uppercase outline-none rounded-none italic focus:border-[#1D1D1D] transition-all"
+                        />
+                      </div>
+                      <p className="text-[9px] font-medium opacity-40 ml-12 italic uppercase tracking-widest">Average peak viewers per stream</p>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center gap-4">
+                        <span className="w-8 h-8 flex items-center justify-center bg-[#1D1D1D] text-white text-[10px] font-black italic">3</span>
+                        <input 
+                          type="number"
+                          {...register("avgWeekly")}
+                          placeholder="e.g. 1,200"
+                          className="flex-1 bg-[#F8F8F8] border border-[#1D1D1D]/10 p-5 text-sm font-bold uppercase outline-none rounded-none italic focus:border-[#1D1D1D] transition-all"
+                        />
+                      </div>
+                      <p className="text-[9px] font-medium opacity-40 ml-12 italic uppercase tracking-widest">Average weekly total viewers</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Categories */}
+                <div className="flex flex-col gap-6">
+                  <label className="text-[10px] font-black uppercase tracking-widest italic">What content do you create?</label>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      "Gaming", "Beauty & Makeup", "Fashion", "Fitness & Health", "Food & Cooking", "Music", "Comedy", "Education", "Business & Finance", "Lifestyle", "Sports", "Tech", "Travel", "Other"
+                    ].map(cat => (
+                      <label key={cat} className="cursor-pointer">
+                        <input type="checkbox" {...register("categories")} value={cat} className="peer hidden" />
+                        <div className="px-4 py-2 border-2 border-[#1D1D1D]/10 bg-white peer-checked:bg-[#389C9A] peer-checked:text-white peer-checked:border-[#389C9A] text-[9px] font-black uppercase tracking-widest transition-all rounded-none italic">
+                          {cat}
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Bio */}
+                <div className="flex flex-col gap-3">
+                  <label className="text-[10px] font-black uppercase tracking-widest italic">Describe your audience</label>
+                  <textarea 
+                    {...register("audienceBio")}
+                    rows={4}
+                    placeholder="Who watches you? age, interests, location..."
+                    className="w-full bg-[#F8F8F8] border border-[#1D1D1D]/10 p-5 text-sm font-medium outline-none focus:border-[#1D1D1D] resize-none transition-all rounded-none italic"
+                  />
+                </div>
+              </div>
+            </section>
+          </motion.div>
+        )}
+
+        {step === 4 && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-12">
+            <section>
+              <h2 className="text-2xl font-black uppercase tracking-tight italic mb-2">Upload Verification</h2>
+              <p className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-8 italic">Proof of your streaming analytics from the last 30 days.</p>
+              
+              <div className="border-2 border-dashed border-[#1D1D1D]/20 p-12 flex flex-col items-center gap-6 bg-[#F8F8F8] rounded-none group hover:border-[#1D1D1D] transition-all cursor-pointer">
+                <div className="p-6 border-2 border-[#1D1D1D] bg-white group-hover:bg-[#1D1D1D] group-hover:text-white transition-all rounded-none">
+                  <Upload className="w-8 h-8" />
+                </div>
+                <div className="text-center">
+                  <p className="text-[10px] font-black uppercase tracking-widest mb-2 italic">Upload Screenshot</p>
+                  <p className="text-[8px] font-bold uppercase opacity-30 tracking-widest">JPG, PNG OR PDF · MAX 10MB</p>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-6 pt-12 border-t-2 border-[#1D1D1D]/10">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest italic text-[#1D1D1D]/40">Referral Code (Optional)</label>
+                  <input 
+                    {...register("referral")}
+                    placeholder="If you were referred by another creator"
+                    className="w-full bg-[#F8F8F8] border border-[#1D1D1D]/10 p-5 text-sm font-bold uppercase tracking-tight outline-none focus:border-[#1D1D1D] transition-all rounded-none italic"
+                  />
+                </div>
+              </div>
+            </section>
+          </motion.div>
+        )}
+
+        {step === 5 && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-12">
+            <section>
+              <h2 className="text-2xl font-black uppercase tracking-tight italic mb-2">Final Review</h2>
+              <p className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-8 italic">Please confirm your details are correct before submitting.</p>
+              
+              <div className="bg-[#F8F8F8] border-2 border-[#1D1D1D] p-8 rounded-none flex flex-col gap-6">
+                <div className="flex justify-between items-center border-b border-[#1D1D1D]/10 pb-4 italic">
+                  <span className="text-[10px] font-bold uppercase text-[#1D1D1D]/40">Name</span>
+                  <span className="text-[10px] font-black uppercase">{watch("fullName") || "Not entered"}</span>
+                </div>
+                <div className="flex justify-between items-center border-b border-[#1D1D1D]/10 pb-4 italic">
+                  <span className="text-[10px] font-bold uppercase text-[#1D1D1D]/40">Email</span>
+                  <span className="text-[10px] font-black uppercase">{watch("email") || "Not entered"}</span>
+                </div>
+                <div className="flex justify-between items-center italic">
+                  <span className="text-[10px] font-bold uppercase text-[#1D1D1D]/40">Main Platform</span>
+                  <span className="text-[10px] font-black uppercase">{watch("platforms.0.type") || "Not entered"}</span>
+                </div>
+              </div>
+
+              <div className="mt-8 flex flex-col gap-4">
+                <label className="flex items-start gap-3 cursor-pointer group">
+                  <input 
+                    type="checkbox" 
+                    {...register("termsAgreed")}
+                    className="hidden" 
+                    id="termsCheckbox"
+                  />
+                  <div 
+                    onClick={() => {
+                      const checkbox = document.getElementById('termsCheckbox') as HTMLInputElement;
+                      if (checkbox) checkbox.click();
+                    }}
+                    className={`mt-1 w-5 h-5 border-2 border-[#1D1D1D] flex items-center justify-center bg-white transition-all rounded-none cursor-pointer ${
+                      termsAgreed ? 'bg-[#389C9A] border-[#389C9A]' : ''
+                    }`}
+                  >
+                    {termsAgreed && <CheckCircle2 className="w-3 h-3 text-white" />}
+                  </div>
+                  <span className="text-[10px] font-bold leading-tight opacity-60 italic uppercase tracking-tight">
+                    I agree to LiveLink's <Link to="/terms" className="underline font-black hover:text-[#389C9A]">Terms of Service</Link> and 
+                    <Link to="/privacy" className="underline font-black hover:text-[#389C9A]"> Privacy Policy</Link>. I confirm that all information provided is accurate and my own.
+                  </span>
+                </label>
+                {!termsAgreed && step === 5 && (
+                  <p className="text-[9px] font-black uppercase text-red-500 mt-1 italic">
+                    You must agree to the terms to submit your application
+                  </p>
+                )}
+              </div>
+            </section>
+          </motion.div>
+        )}
+      </div>
+
+      {/* Footer Navigation */}
+      <div className="fixed bottom-0 left-0 right-0 p-6 bg-white border-t-2 border-[#1D1D1D] z-50 max-w-[480px] mx-auto">
+        <div className="flex gap-4">
+          {step > 1 && (
+            <button 
+              onClick={prevStep}
+              className="px-6 py-5 border-2 border-[#1D1D1D] text-[#1D1D1D] font-black uppercase tracking-widest text-[10px] hover:bg-[#F8F8F8] transition-all rounded-none italic"
+            >
+              Back
+            </button>
+          )}
+          <button 
+            onClick={step === 5 ? handleSubmit(onSubmit) : nextStep}
+            className={`flex-1 flex items-center justify-between p-6 font-black uppercase tracking-tight active:scale-[0.98] transition-all rounded-none italic ${
+              step === 5 && !termsAgreed 
+                ? 'bg-[#1D1D1D]/50 cursor-not-allowed' 
+                : 'bg-[#1D1D1D] text-white'
+            }`}
+            disabled={step === 5 && !termsAgreed}
+          >
+            <span>{step === 5 ? "Submit Application" : "Continue"}</span>
+            <ArrowRight className="w-5 h-5 text-[#FEDB71]" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function AdminApplicationQueue() {
+  const [apps, setApps] = useState([
+    { id: 1, name: "Jordan Plays", platform: "Twitch", viewers: "450", status: "Pending", appliedAt: "2024-01-15" },
+    { id: 2, name: "Sarah Stream", platform: "TikTok", viewers: "1.2k", status: "Pending", appliedAt: "2024-01-14" }
+  ]);
+
+  const handleApprove = (id: number) => {
+    toast.success("Application approved! Creator will be notified.");
+    setApps(prev => prev.filter(app => app.id !== id));
+  };
+
+  const handleReject = (id: number) => {
+    toast.error("Application rejected.");
+    setApps(prev => prev.filter(app => app.id !== id));
+  };
+
+  return (
+    <div className="flex flex-col min-h-screen bg-white text-[#1D1D1D]">
+      <Toaster position="top-center" richColors />
+      <AppHeader title="Admin Review" showLogo />
+      <main className="p-8 max-w-[600px] mx-auto w-full pb-32">
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="text-3xl font-black uppercase tracking-tighter italic">Pending Applications</h1>
+          <span className="bg-[#FEDB71] px-3 py-1 text-[10px] font-black uppercase tracking-widest">
+            {apps.length} new
+          </span>
+        </div>
+        
+        {apps.length === 0 ? (
+          <div className="border-2 border-[#1D1D1D]/10 p-12 text-center">
+            <p className="text-xs text-[#1D1D1D]/40">No pending applications to review.</p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4">
+            {apps.map(app => (
+              <motion.div 
+                key={app.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="bg-[#F8F8F8] border-2 border-[#1D1D1D] p-6 flex flex-col gap-4 rounded-none"
+              >
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="font-black uppercase tracking-tight text-lg italic">{app.name}</h3>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-[#389C9A]">
+                      {app.platform} · {app.viewers} Avg Viewers
+                    </p>
+                    <p className="text-[8px] font-medium text-[#1D1D1D]/40 uppercase tracking-widest mt-1">
+                      Applied: {new Date(app.appliedAt).toLocaleDateString()}
                     </p>
                   </div>
+                  <span className="px-2 py-1 bg-[#FEDB71] text-[#1D1D1D] text-[8px] font-black uppercase border border-[#1D1D1D]/10">
+                    Pending Review
+                  </span>
                 </div>
-              ))}
-
-              {applications.length > 3 && (
-                <button
-                  onClick={() => setApplicationsExpanded(!applicationsExpanded)}
-                  className="w-full py-2 text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-2 text-[#1D1D1D]/30"
-                >
-                  {applicationsExpanded ? (
-                    <>Show less <ChevronUp className="w-3 h-3" /></>
-                  ) : (
-                    <>Show {applications.length - 3} more <ChevronDown className="w-3 h-3" /></>
-                  )}
-                </button>
-              )}
-
-              <Link
-                to="/browse-businesses"
-                className="text-[9px] font-black uppercase tracking-widest text-[#1D1D1D]/40 underline mt-4 text-center italic"
-              >
-                Browse More Opportunities →
-              </Link>
-            </div>
-          )}
-        </div>
-
-        {/* Section 7 — Upcoming Campaigns */}
-        <div className="px-6 pb-12">
-          <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-[#1D1D1D]/40 mb-6">
-            Coming Up
-          </h3>
-
-          {errors.upcoming ? (
-            <SectionError message={errors.upcoming} onRetry={refetch} />
-          ) : upcomingCampaigns.length > 0 ? (
-            <div className="flex flex-col gap-3">
-              {upcomingCampaigns.map(camp => (
-                <div 
-                  key={camp.id} 
-                  className="bg-white border-2 border-[#1D1D1D] p-4 flex items-center justify-between"
-                >
-                  <div className="flex items-center gap-4">
-                    <ImageWithFallback 
-                      src={camp.logo || ''} 
-                      className="w-10 h-10 border border-[#1D1D1D]/10 grayscale object-cover" 
-                    />
-                    <div>
-                      <h4 className="font-black text-xs uppercase tracking-tight">{camp.business}</h4>
-                      <p className="text-[8px] font-bold text-[#1D1D1D]/40 uppercase tracking-widest italic">
-                        {new Date(camp.start_date).toLocaleDateString()}
-                      </p>
-                    </div>
+                
+                {/* Quick Stats */}
+                <div className="grid grid-cols-3 gap-2 py-4 border-t border-b border-[#1D1D1D]/10">
+                  <div className="text-center">
+                    <p className="text-[9px] font-black uppercase tracking-widest opacity-40">Platforms</p>
+                    <p className="text-xs font-black mt-1">2</p>
                   </div>
-                  <div className="text-right">
-                    <p className="text-[8px] font-black uppercase tracking-widest mb-1">{camp.package}</p>
-                    <button
-                      onClick={() => navigate(`/creator/upcoming-gig/${camp.id}`)}
-                      className="text-[8px] font-black uppercase tracking-widest text-[#1D1D1D] underline italic cursor-pointer hover:opacity-70 transition-opacity"
-                    >
-                      View Details
-                    </button>
+                  <div className="text-center border-l border-r border-[#1D1D1D]/10">
+                    <p className="text-[9px] font-black uppercase tracking-widest opacity-40">Categories</p>
+                    <p className="text-xs font-black mt-1">Gaming</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[9px] font-black uppercase tracking-widest opacity-40">Streams/Week</p>
+                    <p className="text-xs font-black mt-1">4-5</p>
                   </div>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs text-[#1D1D1D]/40">
-              No upcoming campaigns scheduled.
-            </p>
-          )}
-        </div>
 
-        {/* Section 8 — Quick Actions */}
-        <div className="px-6 pb-24">
-          <div className="grid grid-cols-3 gap-3">
-            <button
-              onClick={() => navigate("/campaigns")}
-              className="bg-white border-2 border-[#1D1D1D] p-6 flex flex-col items-center gap-3 active:bg-[#1D1D1D] active:text-white transition-all group"
-            >
-              <div className="p-3 bg-[#F8F8F8] rounded-none group-active:bg-white/20">
-                <List className="w-5 h-5" />
-              </div>
-              <span className="text-[9px] font-black uppercase tracking-widest text-center leading-tight">
-                Campaigns
-              </span>
-            </button>
-            <button
-              onClick={() => earningsRef.current?.scrollIntoView({ behavior: "smooth" })}
-              className="bg-white border-2 border-[#1D1D1D] p-6 flex flex-col items-center gap-3 active:bg-[#1D1D1D] active:text-white transition-all group"
-            >
-              <div className="p-3 bg-[#F8F8F8] rounded-none group-active:bg-white/20">
-                <Wallet className="w-5 h-5" />
-              </div>
-              <span className="text-[9px] font-black uppercase tracking-widest text-center leading-tight">
-                Earnings
-              </span>
-            </button>
-            <button
-              onClick={() => navigate("/profile")}
-              className="bg-white border-2 border-[#1D1D1D] p-6 flex flex-col items-center gap-3 active:bg-[#1D1D1D] active:text-white transition-all group"
-            >
-              <div className="p-3 bg-[#F8F8F8] rounded-none group-active:bg-white/20">
-                <User className="w-5 h-5" />
-              </div>
-              <span className="text-[9px] font-black uppercase tracking-widest text-center leading-tight">
-                Profile
-              </span>
-            </button>
+                {/* Action Buttons */}
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => handleApprove(app.id)}
+                    className="flex-1 bg-[#1D1D1D] text-white p-4 text-[10px] font-black uppercase tracking-widest italic border-2 border-[#1D1D1D] hover:bg-[#389C9A] hover:border-[#389C9A] transition-all active:scale-95 flex items-center justify-center gap-2"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Approve
+                  </button>
+                  <button 
+                    onClick={() => handleReject(app.id)}
+                    className="flex-1 border-2 border-[#1D1D1D] text-[#1D1D1D] p-4 text-[10px] font-black uppercase tracking-widest italic hover:bg-red-500 hover:text-white hover:border-red-500 transition-all active:scale-95 flex items-center justify-center gap-2"
+                  >
+                    <X className="w-3.5 h-3.5" /> Reject
+                  </button>
+                </div>
+
+                {/* View Details Link */}
+                <Link 
+                  to={`/admin/application/${app.id}`}
+                  className="text-[9px] font-black uppercase tracking-widest text-[#389C9A] underline italic text-center hover:opacity-70 transition-opacity"
+                >
+                  View Full Application Details
+                </Link>
+              </motion.div>
+            ))}
+          </div>
+        )}
+
+        {/* Admin Quick Stats */}
+        <div className="mt-12 pt-8 border-t-2 border-[#1D1D1D]/10">
+          <h2 className="text-[10px] font-black uppercase tracking-[0.3em] mb-6 opacity-40">Quick Stats</h2>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="bg-[#F8F8F8] p-4 text-center">
+              <p className="text-2xl font-black italic text-[#389C9A]">{apps.length}</p>
+              <p className="text-[8px] font-black uppercase tracking-widest mt-1">Pending</p>
+            </div>
+            <div className="bg-[#F8F8F8] p-4 text-center">
+              <p className="text-2xl font-black italic text-[#FEDB71]">12</p>
+              <p className="text-[8px] font-black uppercase tracking-widest mt-1">Approved</p>
+            </div>
+            <div className="bg-[#F8F8F8] p-4 text-center">
+              <p className="text-2xl font-black italic text-[#1D1D1D]/40">3</p>
+              <p className="text-[8px] font-black uppercase tracking-widest mt-1">Rejected</p>
+            </div>
           </div>
         </div>
       </main>
 
-      <BottomNav />
-
-      {selectedRequest && (
-        <DeclineOfferModal
-          isOpen={isDeclineModalOpen}
-          onClose={() => setIsDeclineModalOpen(false)}
-          onConfirm={handleConfirmDecline}
-          offerDetails={{
-            partnerName: selectedRequest.business,
-            offerName: selectedRequest.name,
-            campaignType: selectedRequest.type,
-            amount: `₦${selectedRequest.price}`,
-            logo: selectedRequest.logo || '',
-            partnerType: "Business",
-          }}
-        />
-      )}
+      {/* Admin Bottom Nav */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t-2 border-[#1D1D1D] p-4 max-w-[480px] mx-auto">
+        <div className="flex justify-around">
+          <button className="flex flex-col items-center gap-1 text-[#389C9A]">
+            <ShieldCheck className="w-5 h-5" />
+            <span className="text-[8px] font-black uppercase tracking-widest">Review</span>
+          </button>
+          <button className="flex flex-col items-center gap-1 opacity-40">
+            <CheckCircle2 className="w-5 h-5" />
+            <span className="text-[8px] font-black uppercase tracking-widest">Approved</span>
+          </button>
+          <button className="flex flex-col items-center gap-1 opacity-40">
+            <X className="w-5 h-5" />
+            <span className="text-[8px] font-black uppercase tracking-widest">Rejected</span>
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
