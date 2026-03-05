@@ -34,6 +34,7 @@ export function CreatorLogin() {
           <input
             type="email"
             placeholder="Email"
+            name="email" 
             value={email}
             onChange={e => setEmail(e.target.value)}
             className="w-full pl-10 p-3 border rounded"
@@ -45,6 +46,7 @@ export function CreatorLogin() {
           <input
             type={showPassword ? "text" : "password"}
             placeholder="Password"
+            name="password" 
             value={password}
             onChange={e => setPassword(e.target.value)}
             className="w-full pl-10 p-3 border rounded"
