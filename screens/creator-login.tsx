@@ -12,7 +12,7 @@ export function CreatorLogin() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.InWithPassword({
       email,
       password,
     });
@@ -59,6 +59,7 @@ export function CreatorLogin() {
           </button>
         </div>
         <button
+          onClick={handleSubmit}
           type="submit"
           className="w-full bg-black text-white p-3 font-bold flex items-center justify-center gap-2"
         >
