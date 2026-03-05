@@ -1,13 +1,34 @@
 import React from "react";
 import { Link, useNavigate } from "react-router";
 import { motion } from "motion/react";
-import { Video as VideoIcon, Building, ArrowRight, ChevronRight } from "lucide-react";
+import { Video as VideoIcon, Building, ArrowRight, ChevronRight, Shield } from "lucide-react";
 
 export function LoginPortal() {
   const navigate = useNavigate();
+  
+  // Check if user is admin - you'll need to implement your own logic here
+  // This could come from context, props, or a hook
+  const isAdmin = true; // Replace with actual admin check
 
   return (
-    <div className="min-h-screen bg-white flex flex-col px-8 pt-20 pb-12">
+    <div className="min-h-screen bg-white flex flex-col px-8 pt-20 pb-12 relative">
+      {/* Admin Link - Only visible to admin users */}
+      {isAdmin && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="absolute top-4 right-8 z-10"
+        >
+          <Link
+            to="/admin"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1D1D1D] text-white text-xs font-bold uppercase tracking-wider italic rounded-sm hover:bg-[#389C9A] transition-colors"
+          >
+            <Shield className="w-3.5 h-3.5" />
+            <span>Admin</span>
+          </Link>
+        </motion.div>
+      )}
+
       {/* Logo Section */}
       <div className="flex flex-col items-center mb-16">
         <motion.div
@@ -24,6 +45,7 @@ export function LoginPortal() {
         </motion.div>
       </div>
 
+      {/* Rest of your component remains the same... */}
       {/* Heading Section */}
       <div className="mb-12">
         <motion.h1
