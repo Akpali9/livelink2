@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import { supabase } from '../lib/supabase';
+import type { SocialMedia } from '../types/dashboard';
 
-type BusinessFormData = {
+interface BusinessFormData {
   fullName: string;
   jobTitle: string;
   email: string;
@@ -13,7 +14,7 @@ type BusinessFormData = {
   industry: string;
   description: string;
   website: string;
-  socials: { platform: string; handle: string }[];
+  socials: SocialMedia[];
   country: string;
   city: string;
   postcode: string;
@@ -26,8 +27,7 @@ type BusinessFormData = {
   gender: string[];
   targetLocation: string;
   referral: string;
-  agreeToTerms: boolean;
-};
+}
 
 export function useBusinessRegistration() {
   const [loading, setLoading] = useState(false);
@@ -37,7 +37,7 @@ export function useBusinessRegistration() {
     const fileExt = file.name.split('.').pop();
     const fileName = `${userId}/business-id-${Date.now()}.${fileExt}`;
     
-    const { error: uploadError, data } = await supabase.storage
+    const { error: uploadError } = await supabase.storage
       .from('business-verifications')
       .upload(fileName, file);
 
@@ -55,6 +55,8 @@ export function useBusinessRegistration() {
     setError(null);
 
     try {
+      console.log('Starting business registration for:', data.email);
+
       // 1. Create auth user
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: data.email,
@@ -62,14 +64,22 @@ export function useBusinessRegistration() {
         options: {
           data: {
             full_name: data.fullName,
-            user_type: 'business',
-            job_title: data.jobTitle
+            business_name: data.businessName,
+            user_type: 'business'
           }
         }
       });
 
-      if (authError) throw authError;
-      if (!authData.user) throw new Error('Failed to create user');
+      if (authError) {
+        console.error('Auth error:', authError);
+        throw new Error(authError.message);
+      }
+
+      if (!authData.user) {
+        throw new Error('No user returned from signup');
+      }
+
+      console.log('User created successfully:', authData.user.id);
 
       // 2. Upload ID document
       const idUrl = await uploadIDDocument(idFile, authData.user.id);
@@ -77,14 +87,10 @@ export function useBusinessRegistration() {
       // 3. Insert business profile
       const { error: profileError } = await supabase
         .from('business_profiles')
-        .insert({
-          user_id: authData.user.id,
-          full_name: data.fullName,
+        .update({
           job_title: data.jobTitle,
           phone_number: data.phoneNumber,
           phone_country_code: data.phoneCountryCode,
-          business_name: data.businessName,
-          business_type: data.businessType,
           industry: data.industry,
           description: data.description,
           website: data.website || null,
@@ -102,11 +108,15 @@ export function useBusinessRegistration() {
           referral_code: data.referral || null,
           id_verification_url: idUrl,
           status: 'pending'
-        });
+        })
+        .eq('id', authData.user.id);
 
-      if (profileError) throw profileError;
+      if (profileError) {
+        console.error('Profile update error:', profileError);
+        throw new Error('Failed to update profile: ' + profileError.message);
+      }
 
-      // 4. Insert social media handles if any
+      // 4. Insert social media handles
       const validSocials = data.socials.filter(s => s.handle.trim() !== '');
       if (validSocials.length > 0) {
         const socialsToInsert = validSocials.map(social => ({
@@ -119,19 +129,13 @@ export function useBusinessRegistration() {
           .from('business_socials')
           .insert(socialsToInsert);
 
-        if (socialsError) throw socialsError;
+        if (socialsError) {
+          console.error('Socials insert error:', socialsError);
+          // Don't throw - socials are not critical
+        }
       }
 
-      // 5. Send notification email via edge function
-      await supabase.functions.invoke('send-business-welcome', {
-        body: { 
-          email: data.email, 
-          name: data.fullName,
-          businessName: data.businessName 
-        }
-      });
-
-      return { success: true };
+      return { success: true, userId: authData.user.id };
     } catch (err: any) {
       console.error('Error submitting business registration:', err);
       setError(err.message || 'Failed to submit registration. Please try again.');
