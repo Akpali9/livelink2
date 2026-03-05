@@ -351,5 +351,45 @@ const routes: RouteObject[] = [
     ],
   },
 ];
+import { AdminDashboard } from "./screens/admin-dashboard";
+
+// Add this loader function
+async function requireAdmin() {
+  const { data: { session } } = await supabase.auth.getSession();
+  
+  if (!session) {
+    return redirect("/login/portal");
+  }
+  
+  // Check if user is admin
+  const { data: adminProfile } = await supabase
+    .from('admin_profiles')
+    .select('*')
+    .eq('id', session.user.id)
+    .single();
+  
+  if (!adminProfile) {
+    return redirect("/");
+  }
+  
+  return null;
+}
+
+// Add this to your routes array
+{
+  path: "admin",
+  children: [
+    { 
+      index: true, 
+      Component: AdminDashboard,
+      loader: requireAdmin 
+    },
+    { 
+      path: "applications", 
+      Component: AdminApplicationQueue,
+      loader: requireAdmin 
+    }
+  ]
+}
 
 export const router = createBrowserRouter(routes);
