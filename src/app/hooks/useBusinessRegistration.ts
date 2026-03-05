@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, uploadFile } from '../lib/supabase';
 import type { SocialMedia } from '../types/dashboard';
 
 interface BusinessFormData {
@@ -33,23 +33,6 @@ export function useBusinessRegistration() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const uploadIDDocument = async (file: File, userId: string) => {
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${userId}/business-id-${Date.now()}.${fileExt}`;
-    
-    const { error: uploadError } = await supabase.storage
-      .from('business-verifications')
-      .upload(fileName, file);
-
-    if (uploadError) throw uploadError;
-
-    const { data: { publicUrl } } = supabase.storage
-      .from('business-verifications')
-      .getPublicUrl(fileName);
-
-    return publicUrl;
-  };
-
   const submitRegistration = async (data: BusinessFormData, idFile: File) => {
     setLoading(true);
     setError(null);
@@ -82,9 +65,9 @@ export function useBusinessRegistration() {
       console.log('User created successfully:', authData.user.id);
 
       // 2. Upload ID document
-      const idUrl = await uploadIDDocument(idFile, authData.user.id);
+      const idUrl = await uploadFile('business-verifications', idFile, authData.user.id);
 
-      // 3. Insert business profile
+      // 3. Update business profile
       const { error: profileError } = await supabase
         .from('business_profiles')
         .update({
