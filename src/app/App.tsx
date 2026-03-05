@@ -1,6 +1,9 @@
+import React from 'react';
+import ReactDOM from 'react-dom/client';
 import { RouterProvider } from 'react-router';
-import { router } from './routes';
-
+import { router } from './router';
 export default function App() {
-  return <RouterProvider router={router} />;
+  return<React.StrictMode>
+    <RouterProvider router={router} />
+  </React.StrictMode>;
 }
