@@ -1,5 +1,18 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router";
+import { useOutletContext } from 'react-router';
+import type { User } from '@supabase/supabase-js';
+import type { Tables } from '../lib/supabase';
+
+type AuthContext = {
+  user: User | null;
+  profile: Tables['creator_profiles'] | Tables['business_profiles'] | null;
+  userType: 'creator' | 'business' | null;
+};
+
+export function useAuth() {
+  return useOutletContext<AuthContext>();
+}
 import { 
   ArrowUpRight, 
   Inbox, 
@@ -52,6 +65,7 @@ function SectionError({ message, onRetry }: { message: string; onRetry: () => vo
 }
 
 export function Dashboard() {
+    const { user, profile, userType } = useAuth();
   const navigate = useNavigate();
   const earningsRef = useRef<HTMLDivElement>(null);
   const [creatorId, setCreatorId] = useState<string | null>(null);
