@@ -27,14 +27,15 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { AppHeader } from "../components/app-header";
+import { supabase } from "../lib/supabaseClient";
 
 type CreatorFormData = {
   // Step 1
   fullName: string;
   dob: string;
   email: string;
-  password: "";
-  confirmPassword: "";
+  password: string;
+  confirmPassword: string;
   phoneNumber: string;
   country: string;
   city: string;
@@ -59,6 +60,9 @@ export function BecomeCreator() {
   const [step, setStep] = useState(1);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [verificationFile, setVerificationFile] = useState<File | null>(null);
 
   const { register, handleSubmit, watch, control, formState: { errors, isValid } } = useForm<CreatorFormData>({
     defaultValues: {
@@ -76,6 +80,7 @@ export function BecomeCreator() {
 
   const password = watch("password");
   const dob = watch("dob");
+  const email = watch("email");
 
   const getPasswordStrength = () => {
     if (!password) return null;
@@ -96,10 +101,114 @@ export function BecomeCreator() {
     return age < 18;
   };
 
-  const onSubmit = (data: any) => {
-    console.log("Form Data:", data);
-    setIsSubmitted(true);
-    window.scrollTo(0, 0);
+  const uploadVerificationFile = async (file: File, userId: string) => {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${userId}/verification-${Date.now()}.${fileExt}`;
+    
+    const { error: uploadError, data } = await supabase.storage
+      .from('creator-verifications')
+      .upload(fileName, file);
+
+    if (uploadError) throw uploadError;
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('creator-verifications')
+      .getPublicUrl(fileName);
+
+    return publicUrl;
+  };
+
+  const onSubmit = async (data: CreatorFormData) => {
+    setIsLoading(true);
+    setUploadError(null);
+
+    try {
+      // 1. Create auth user
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: data.email,
+        password: data.password,
+        options: {
+          data: {
+            full_name: data.fullName,
+            user_type: 'creator'
+          }
+        }
+      });
+
+      if (authError) throw authError;
+      if (!authData.user) throw new Error('Failed to create user');
+
+      // 2. Upload verification file if exists
+      let verificationUrl = null;
+      if (verificationFile) {
+        verificationUrl = await uploadVerificationFile(verificationFile, authData.user.id);
+      }
+
+      // 3. Insert creator profile
+      const { error: profileError } = await supabase
+        .from('creator_profiles')
+        .insert({
+          user_id: authData.user.id,
+          full_name: data.fullName,
+          date_of_birth: data.dob,
+          phone_number: data.phoneNumber,
+          country: data.country,
+          city: data.city,
+          streaming_frequency: data.frequency,
+          stream_duration: data.duration,
+          streaming_days: data.days,
+          typical_time: data.timeOfDay,
+          avg_concurrent: parseInt(data.avgConcurrent) || 0,
+          avg_peak: parseInt(data.avgPeak) || 0,
+          avg_weekly: parseInt(data.avgWeekly) || 0,
+          categories: data.categories,
+          audience_bio: data.audienceBio,
+          referral_code: data.referral,
+          verification_screenshot_url: verificationUrl,
+          status: 'pending'
+        });
+
+      if (profileError) throw profileError;
+
+      // 4. Insert platforms
+      const platformsToInsert = data.platforms.map(platform => ({
+        user_id: authData.user?.id,
+        platform_type: platform.type,
+        username: platform.username,
+        profile_url: platform.url
+      }));
+
+      const { error: platformsError } = await supabase
+        .from('creator_platforms')
+        .insert(platformsToInsert);
+
+      if (platformsError) throw platformsError;
+
+      // 5. Send welcome email via edge function
+      await supabase.functions.invoke('send-creator-welcome', {
+        body: { email: data.email, name: data.fullName }
+      });
+
+      setIsSubmitted(true);
+      window.scrollTo(0, 0);
+    } catch (error: any) {
+      console.error('Error submitting application:', error);
+      setUploadError(error.message || 'Failed to submit application. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        setUploadError('File size must be less than 10MB');
+        return;
+      }
+      setVerificationFile(file);
+      setUploadError(null);
+    }
   };
 
   const nextStep = () => setStep(s => Math.min(s + 1, 5));
@@ -158,7 +267,7 @@ export function BecomeCreator() {
 
   return (
     <div className="flex flex-col min-h-screen bg-white pb-32 text-[#1D1D1D]">
-            {/* Header */}
+      {/* Header */}
       <div className="px-8 pt-12 pb-8 border-b-2 border-[#1D1D1D]">
         <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest mb-6 opacity-40 italic">
           <ChevronLeft className="w-4 h-4 text-[#1D1D1D]" /> Back
@@ -192,6 +301,14 @@ export function BecomeCreator() {
           </div>
         ))}
       </div>
+
+      {uploadError && (
+        <div className="px-8 mt-4">
+          <div className="bg-red-50 border border-red-200 p-4 text-red-600 text-[10px] font-black uppercase tracking-widest">
+            {uploadError}
+          </div>
+        </div>
+      )}
 
       <div className="px-8 mt-12 max-w-[600px] mx-auto w-full flex-1">
         {step === 1 && (
@@ -265,7 +382,10 @@ export function BecomeCreator() {
                     <label className="text-[10px] font-black uppercase tracking-widest italic text-[#1D1D1D]/40">Confirm Password</label>
                     <input 
                       type="password"
-                      {...register("confirmPassword", { required: true })}
+                      {...register("confirmPassword", { 
+                        required: true,
+                        validate: value => value === password || "Passwords do not match"
+                      })}
                       className="w-full bg-[#F8F8F8] border border-[#1D1D1D]/10 p-5 text-sm font-bold uppercase tracking-tight outline-none focus:border-[#1D1D1D] transition-all rounded-none"
                     />
                   </div>
@@ -408,7 +528,7 @@ export function BecomeCreator() {
                       { val: "Monthly or less", sub: "I go live once a month or occasionally" }
                     ].map(opt => (
                       <label key={opt.val} className="relative group cursor-pointer">
-                        <input type="radio" {...register("frequency")} value={opt.val} className="peer hidden" />
+                        <input type="radio" {...register("frequency", { required: true })} value={opt.val} className="peer hidden" />
                         <div className="p-6 border-2 border-[#1D1D1D]/10 bg-white peer-checked:bg-[#1D1D1D] peer-checked:text-white peer-checked:border-[#1D1D1D] transition-all rounded-none">
                           <p className="text-[11px] font-black uppercase tracking-widest mb-1 italic">{opt.val}</p>
                           <p className="text-[9px] font-medium uppercase tracking-widest opacity-40 peer-checked:opacity-60 italic">{opt.sub}</p>
@@ -430,7 +550,7 @@ export function BecomeCreator() {
                       "Over 2 hours"
                     ].map(opt => (
                       <label key={opt} className="relative cursor-pointer">
-                        <input type="radio" {...register("duration")} value={opt} className="peer hidden" />
+                        <input type="radio" {...register("duration", { required: true })} value={opt} className="peer hidden" />
                         <div className="p-6 border-2 border-[#1D1D1D]/10 bg-white peer-checked:bg-[#1D1D1D] peer-checked:text-white peer-checked:border-[#1D1D1D] transition-all text-center rounded-none italic">
                           <p className="text-[10px] font-black uppercase tracking-widest">{opt}</p>
                         </div>
@@ -460,7 +580,7 @@ export function BecomeCreator() {
                   <div className="flex flex-col gap-6">
                     <label className="text-[10px] font-black uppercase tracking-widest italic text-[#1D1D1D]/40">Typical Time</label>
                     <select 
-                      {...register("timeOfDay")}
+                      {...register("timeOfDay", { required: true })}
                       className="w-full bg-white border-2 border-[#1D1D1D]/10 p-5 text-xs font-black uppercase tracking-tight outline-none rounded-none italic"
                     >
                       <option>Morning (6am–12pm)</option>
@@ -481,7 +601,7 @@ export function BecomeCreator() {
                         <span className="w-8 h-8 flex items-center justify-center bg-[#1D1D1D] text-white text-[10px] font-black italic">1</span>
                         <input 
                           type="number"
-                          {...register("avgConcurrent")}
+                          {...register("avgConcurrent", { required: true })}
                           placeholder="e.g. 250"
                           className="flex-1 bg-[#F8F8F8] border border-[#1D1D1D]/10 p-5 text-sm font-bold uppercase outline-none rounded-none italic focus:border-[#1D1D1D] transition-all"
                         />
@@ -493,7 +613,7 @@ export function BecomeCreator() {
                         <span className="w-8 h-8 flex items-center justify-center bg-[#1D1D1D] text-white text-[10px] font-black italic">2</span>
                         <input 
                           type="number"
-                          {...register("avgPeak")}
+                          {...register("avgPeak", { required: true })}
                           placeholder="e.g. 500"
                           className="flex-1 bg-[#F8F8F8] border border-[#1D1D1D]/10 p-5 text-sm font-bold uppercase outline-none rounded-none italic focus:border-[#1D1D1D] transition-all"
                         />
@@ -505,7 +625,7 @@ export function BecomeCreator() {
                         <span className="w-8 h-8 flex items-center justify-center bg-[#1D1D1D] text-white text-[10px] font-black italic">3</span>
                         <input 
                           type="number"
-                          {...register("avgWeekly")}
+                          {...register("avgWeekly", { required: true })}
                           placeholder="e.g. 1,200"
                           className="flex-1 bg-[#F8F8F8] border border-[#1D1D1D]/10 p-5 text-sm font-bold uppercase outline-none rounded-none italic focus:border-[#1D1D1D] transition-all"
                         />
@@ -536,7 +656,7 @@ export function BecomeCreator() {
                 <div className="flex flex-col gap-3">
                   <label className="text-[10px] font-black uppercase tracking-widest italic">Describe your audience</label>
                   <textarea 
-                    {...register("audienceBio")}
+                    {...register("audienceBio", { required: true })}
                     rows={4}
                     placeholder="Who watches you? age, interests, location..."
                     className="w-full bg-[#F8F8F8] border border-[#1D1D1D]/10 p-5 text-sm font-medium outline-none focus:border-[#1D1D1D] resize-none transition-all rounded-none italic"
@@ -553,15 +673,25 @@ export function BecomeCreator() {
               <h2 className="text-2xl font-black uppercase tracking-tight italic mb-2">Upload Verification</h2>
               <p className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-8 italic">Proof of your streaming analytics from the last 30 days.</p>
               
-              <div className="border-2 border-dashed border-[#1D1D1D]/20 p-12 flex flex-col items-center gap-6 bg-[#F8F8F8] rounded-none group hover:border-[#1D1D1D] transition-all cursor-pointer">
-                <div className="p-6 border-2 border-[#1D1D1D] bg-white group-hover:bg-[#1D1D1D] group-hover:text-white transition-all rounded-none">
-                  <Upload className="w-8 h-8" />
+              <label className="block cursor-pointer">
+                <input 
+                  type="file" 
+                  accept=".jpg,.jpeg,.png,.pdf"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+                <div className="border-2 border-dashed border-[#1D1D1D]/20 p-12 flex flex-col items-center gap-6 bg-[#F8F8F8] rounded-none group hover:border-[#1D1D1D] transition-all">
+                  <div className="p-6 border-2 border-[#1D1D1D] bg-white group-hover:bg-[#1D1D1D] group-hover:text-white transition-all rounded-none">
+                    <Upload className="w-8 h-8" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[10px] font-black uppercase tracking-widest mb-2 italic">
+                      {verificationFile ? verificationFile.name : "Upload Screenshot"}
+                    </p>
+                    <p className="text-[8px] font-bold uppercase opacity-30 tracking-widest">JPG, PNG OR PDF · MAX 10MB</p>
+                  </div>
                 </div>
-                <div className="text-center">
-                  <p className="text-[10px] font-black uppercase tracking-widest mb-2 italic">Upload Screenshot</p>
-                  <p className="text-[8px] font-bold uppercase opacity-30 tracking-widest">JPG, PNG OR PDF · MAX 10MB</p>
-                </div>
-              </div>
+              </label>
 
               <div className="flex flex-col gap-6 pt-12 border-t-2 border-[#1D1D1D]/10">
                 <div className="flex flex-col gap-1.5">
@@ -620,16 +750,18 @@ export function BecomeCreator() {
           {step > 1 && (
             <button 
               onClick={prevStep}
-              className="px-6 py-5 border-2 border-[#1D1D1D] text-[#1D1D1D] font-black uppercase tracking-widest text-[10px] hover:bg-[#F8F8F8] transition-all rounded-none italic"
+              disabled={isLoading}
+              className="px-6 py-5 border-2 border-[#1D1D1D] text-[#1D1D1D] font-black uppercase tracking-widest text-[10px] hover:bg-[#F8F8F8] transition-all rounded-none italic disabled:opacity-50"
             >
               Back
             </button>
           )}
           <button 
             onClick={step === 5 ? handleSubmit(onSubmit) : nextStep}
-            className="flex-1 flex items-center justify-between bg-[#1D1D1D] text-white p-6 font-black uppercase tracking-tight active:scale-[0.98] transition-all rounded-none italic"
+            disabled={isLoading}
+            className="flex-1 flex items-center justify-between bg-[#1D1D1D] text-white p-6 font-black uppercase tracking-tight active:scale-[0.98] transition-all rounded-none italic disabled:opacity-50"
           >
-            <span>{step === 5 ? "Submit Application" : "Continue"}</span>
+            <span>{isLoading ? "Processing..." : (step === 5 ? "Submit Application" : "Continue")}</span>
             <ArrowRight className="w-5 h-5 text-[#FEDB71]" />
           </button>
         </div>
@@ -639,32 +771,118 @@ export function BecomeCreator() {
 }
 
 export function AdminApplicationQueue() {
-  const [apps, setApps] = useState([
-    { id: 1, name: "Jordan Plays", platform: "Twitch", viewers: "450", status: "Pending" },
-    { id: 2, name: "Sarah Stream", platform: "TikTok", viewers: "1.2k", status: "Pending" }
-  ]);
+  const [apps, setApps] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  React.useEffect(() => {
+    fetchPendingApplications();
+  }, []);
+
+  const fetchPendingApplications = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('creator_profiles')
+        .select(`
+          *,
+          creator_platforms (*)
+        `)
+        .eq('status', 'pending');
+
+      if (error) throw error;
+      setApps(data || []);
+    } catch (error) {
+      console.error('Error fetching applications:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleApprove = async (userId: string) => {
+    try {
+      const { error } = await supabase
+        .from('creator_profiles')
+        .update({ status: 'approved', reviewed_at: new Date().toISOString() })
+        .eq('user_id', userId);
+
+      if (error) throw error;
+
+      // Send approval email
+      await supabase.functions.invoke('send-creator-approval', {
+        body: { userId }
+      });
+
+      fetchPendingApplications();
+    } catch (error) {
+      console.error('Error approving application:', error);
+    }
+  };
+
+  const handleReject = async (userId: string) => {
+    try {
+      const { error } = await supabase
+        .from('creator_profiles')
+        .update({ status: 'rejected', reviewed_at: new Date().toISOString() })
+        .eq('user_id', userId);
+
+      if (error) throw error;
+      fetchPendingApplications();
+    } catch (error) {
+      console.error('Error rejecting application:', error);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col min-h-screen bg-white items-center justify-center">
+        <div className="w-12 h-12 border-4 border-[#1D1D1D] border-t-transparent animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col min-h-screen bg-white text-[#1D1D1D]">
       <AppHeader title="Admin Review" />
       <main className="p-8 max-w-[600px] mx-auto w-full">
-        <h1 className="text-3xl font-black uppercase tracking-tighter italic mb-8">Pending Applications</h1>
+        <h1 className="text-3xl font-black uppercase tracking-tighter italic mb-8">
+          Pending Applications ({apps.length})
+        </h1>
         <div className="flex flex-col gap-4">
           {apps.map(app => (
             <div key={app.id} className="bg-[#F8F8F8] border-2 border-[#1D1D1D] p-6 flex flex-col gap-4 rounded-none">
               <div className="flex justify-between items-start">
                 <div>
-                  <h3 className="font-black uppercase tracking-tight text-lg italic">{app.name}</h3>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-[#389C9A]">{app.platform} · {app.viewers} Avg Viewers</p>
+                  <h3 className="font-black uppercase tracking-tight text-lg italic">{app.full_name}</h3>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-[#389C9A]">
+                    {app.creator_platforms?.[0]?.platform_type} · {app.avg_concurrent} Avg Viewers
+                  </p>
                 </div>
-                <span className="px-2 py-1 bg-[#FEDB71] text-[#1D1D1D] text-[8px] font-black uppercase border border-[#1D1D1D]/10">Pending Review</span>
+                <span className="px-2 py-1 bg-[#FEDB71] text-[#1D1D1D] text-[8px] font-black uppercase border border-[#1D1D1D]/10">
+                  Pending Review
+                </span>
               </div>
               <div className="flex gap-2">
-                <button className="flex-1 bg-[#1D1D1D] text-white p-3 text-[10px] font-black uppercase tracking-widest italic border-2 border-[#1D1D1D]">Approve</button>
-                <button className="flex-1 border-2 border-[#1D1D1D] text-[#1D1D1D] p-3 text-[10px] font-black uppercase tracking-widest italic">Reject</button>
+                <button 
+                  onClick={() => handleApprove(app.user_id)}
+                  className="flex-1 bg-[#1D1D1D] text-white p-3 text-[10px] font-black uppercase tracking-widest italic border-2 border-[#1D1D1D] hover:bg-[#389C9A] transition-colors"
+                >
+                  Approve
+                </button>
+                <button 
+                  onClick={() => handleReject(app.user_id)}
+                  className="flex-1 border-2 border-[#1D1D1D] text-[#1D1D1D] p-3 text-[10px] font-black uppercase tracking-widest italic hover:bg-red-500 hover:text-white hover:border-red-500 transition-colors"
+                >
+                  Reject
+                </button>
               </div>
             </div>
           ))}
+          {apps.length === 0 && (
+            <div className="text-center py-12">
+              <p className="text-[#1D1D1D]/40 text-[10px] font-black uppercase tracking-widest italic">
+                No pending applications
+              </p>
+            </div>
+          )}
         </div>
       </main>
     </div>
