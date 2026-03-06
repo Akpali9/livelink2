@@ -41,7 +41,7 @@ export function BrowseBusinesses() {
 
   const creatorStats = { avgViewers: 250 };
 
-  const userId = "CURRENT_USER_ID"; // replace with supabase.auth.getUser()?.id in real app
+  const userId = supabase.auth.getUser(); // replace with supabase.auth.getUser()?.id in real app
 
   useEffect(() => {
     async function fetchCampaigns() {
