@@ -1,0 +1,238 @@
+import { useEffect, useState } from 'react'
+import { supabase } from '../lib/supabase'
+import type { Profile, StreamProof } from '../types/database'
+import { CheckCircle, XCircle, Users, Shield, Activity } from 'lucide-react'
+import { formatDistanceToNow } from 'date-fns'
+import clsx from 'clsx'
+
+export default function AdminPage() {
+  const [pendingUsers, setPendingUsers] = useState<Profile[]>([])
+  const [pendingProofs, setPendingProofs] = useState<StreamProof[]>([])
+  const [tab, setTab] = useState<'approvals' | 'proofs'>('approvals')
+  const [loading, setLoading] = useState(true)
+  const [rejectionReason, setRejectionReason] = useState<Record<string, string>>({})
+
+  const fetchData = async () => {
+    const [{ data: users }, { data: proofs }] = await Promise.all([
+      supabase.from('profiles').select('*').eq('approval_status', 'pending').order('created_at'),
+      supabase.from('stream_proofs').select('*, campaign:campaigns(title, budget)').eq('status', 'submitted').order('created_at'),
+    ])
+    if (users) setPendingUsers(users)
+    if (proofs) setPendingProofs(proofs as StreamProof[])
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    fetchData()
+
+    // Real-time updates — no filter so we catch status changes moving OUT of pending too
+    const channel = supabase.channel('admin')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, fetchData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'stream_proofs' }, fetchData)
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [])
+
+  const approveUser = async (userId: string) => {
+    await supabase.from('profiles').update({ approval_status: 'approved' }).eq('id', userId)
+    await supabase.from('notifications').insert({
+      user_id: userId,
+      title: 'Account Approved!',
+      body: 'Your LiveLink account has been approved. Welcome to the platform!',
+      type: 'account_approved',
+      read: false,
+    })
+    setPendingUsers(prev => prev.filter(u => u.id !== userId))
+  }
+
+  const rejectUser = async (userId: string) => {
+    await supabase.from('profiles').update({ approval_status: 'rejected' }).eq('id', userId)
+    setPendingUsers(prev => prev.filter(u => u.id !== userId))
+  }
+
+  const verifyProof = async (proofId: string) => {
+    const proof = pendingProofs.find(p => p.id === proofId)
+    if (!proof) return
+    await supabase.from('stream_proofs').update({ status: 'verified', verified_at: new Date().toISOString() }).eq('id', proofId)
+
+    // Increment stream count on campaign
+    const { data: campaign } = await supabase.from('campaigns').select('streams_completed, streams_required, creator_id, business_id, budget, title').eq('id', proof.campaign_id).single()
+    if (campaign) {
+      const newCount = campaign.streams_completed + 1
+      await supabase.from('campaigns').update({ streams_completed: newCount }).eq('id', proof.campaign_id)
+
+      // Check if payout threshold reached (every 4 streams)
+      if (newCount % 4 === 0) {
+        const payout = campaign.budget / (campaign.streams_required / 4)
+        await supabase.from('payments').insert({
+          campaign_id: proof.campaign_id,
+          business_id: campaign.business_id,
+          creator_id: campaign.creator_id,
+          amount: payout,
+          status: 'released',
+          held_at: new Date().toISOString(),
+          released_at: new Date().toISOString(),
+          release_trigger: `stream_${newCount}`,
+        })
+        await supabase.from('notifications').insert({
+          user_id: campaign.creator_id,
+          title: 'Payout Released! 🎉',
+          body: `£${payout.toLocaleString()} has been released for campaign "${campaign.title}"`,
+          type: 'payout_released',
+          read: false,
+        })
+      }
+
+      // Check campaign completion
+      if (newCount >= campaign.streams_required) {
+        await supabase.from('campaigns').update({ status: 'completed', completed_at: new Date().toISOString() }).eq('id', proof.campaign_id)
+      }
+    }
+
+    setPendingProofs(prev => prev.filter(p => p.id !== proofId))
+  }
+
+  const rejectProof = async (proofId: string, creatorId: string, campaignTitle: string) => {
+    const reason = rejectionReason[proofId] || 'Proof did not meet minimum requirements'
+    await supabase.from('stream_proofs').update({ status: 'rejected', rejection_reason: reason }).eq('id', proofId)
+    await supabase.from('notifications').insert({
+      user_id: creatorId,
+      title: 'Stream Proof Rejected',
+      body: `Your proof for "${campaignTitle}" was rejected: ${reason}`,
+      type: 'proof_rejected',
+      read: false,
+    })
+    setPendingProofs(prev => prev.filter(p => p.id !== proofId))
+  }
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <div className="flex items-center gap-3">
+        <div className="w-9 h-9 rounded-xl bg-red-500/15 border border-red-500/25 flex items-center justify-center">
+          <Shield className="w-4 h-4 text-red-400" />
+        </div>
+        <div>
+          <h1 className="section-title">Admin Panel</h1>
+          <p className="text-xs text-white/40">Manage approvals and verify stream proofs</p>
+        </div>
+        <div className="ml-auto flex items-center gap-2 text-xs text-white/30">
+          <span className="live-dot" />
+          Live
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="stat-card">
+          <div className="flex items-center gap-2 mb-2">
+            <Users className="w-4 h-4 text-yellow-400" />
+            <span className="text-xs text-white/40">Pending Approvals</span>
+          </div>
+          <p className="text-3xl font-bold text-yellow-400" style={{ fontFamily: 'Syne, sans-serif' }}>{pendingUsers.length}</p>
+        </div>
+        <div className="stat-card">
+          <div className="flex items-center gap-2 mb-2">
+            <Activity className="w-4 h-4 text-blue-400" />
+            <span className="text-xs text-white/40">Stream Proofs</span>
+          </div>
+          <p className="text-3xl font-bold text-blue-400" style={{ fontFamily: 'Syne, sans-serif' }}>{pendingProofs.length}</p>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 bg-white/[0.03] border border-white/[0.07] rounded-xl p-1">
+        {[
+          { id: 'approvals', label: `User Approvals (${pendingUsers.length})` },
+          { id: 'proofs', label: `Stream Proofs (${pendingProofs.length})` },
+        ].map(t => (
+          <button key={t.id} onClick={() => setTab(t.id as typeof tab)}
+            className={clsx('flex-1 py-2.5 rounded-lg text-sm font-medium transition-all',
+              tab === t.id ? 'bg-brand-500/15 text-brand-400 border border-brand-500/25' : 'text-white/40 hover:text-white'
+            )}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : tab === 'approvals' ? (
+        <div className="space-y-3">
+          {pendingUsers.length === 0 ? (
+            <div className="card p-12 text-center text-white/30 text-sm">No pending approvals</div>
+          ) : pendingUsers.map(user => (
+            <div key={user.id} className="card p-5 flex items-center gap-4">
+              <div className="w-10 h-10 rounded-xl bg-brand-500/10 flex items-center justify-center flex-shrink-0">
+                <span className="font-bold text-brand-400 text-sm">{user.full_name?.charAt(0)}</span>
+              </div>
+              <div className="flex-1">
+                <p className="font-semibold text-white text-sm">{user.full_name}</p>
+                <p className="text-xs text-white/40">{user.email}</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="badge-gray capitalize text-[10px]">{user.role}</span>
+                  <span className="text-[10px] text-white/20">
+                    {formatDistanceToNow(new Date(user.created_at), { addSuffix: true })}
+                  </span>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => approveUser(user.id)} className="btn-primary text-xs px-3 py-2">
+                  <CheckCircle className="w-3.5 h-3.5" /> Approve
+                </button>
+                <button onClick={() => rejectUser(user.id)} className="btn-danger text-xs px-3 py-2">
+                  <XCircle className="w-3.5 h-3.5" /> Reject
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {pendingProofs.length === 0 ? (
+            <div className="card p-12 text-center text-white/30 text-sm">No proofs to review</div>
+          ) : pendingProofs.map(proof => (
+            <div key={proof.id} className="card p-5">
+              <div className="flex items-start gap-4 mb-3">
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-white mb-1">{(proof as any).campaign?.title}</p>
+                  <div className="flex items-center gap-2 text-xs text-white/40">
+                    <span>{proof.duration_minutes} min stream</span>
+                    <span>·</span>
+                    <span>{formatDistanceToNow(new Date(proof.created_at), { addSuffix: true })}</span>
+                  </div>
+                  <a href={proof.stream_url} target="_blank" rel="noopener noreferrer"
+                    className="text-xs text-brand-400 hover:text-brand-300 mt-1 block truncate">
+                    {proof.stream_url}
+                  </a>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => verifyProof(proof.id)} className="btn-primary text-xs px-3 py-2">
+                    <CheckCircle className="w-3.5 h-3.5" /> Verify
+                  </button>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Rejection reason (optional)"
+                  value={rejectionReason[proof.id] ?? ''}
+                  onChange={e => setRejectionReason(prev => ({ ...prev, [proof.id]: e.target.value }))}
+                  className="input flex-1 py-2 text-xs"
+                />
+                <button
+                  onClick={() => rejectProof(proof.id, proof.creator_id, (proof as any).campaign?.title ?? '')}
+                  className="btn-danger text-xs px-3 py-2"
+                >
+                  <XCircle className="w-3.5 h-3.5" /> Reject
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
