@@ -1,12 +1,23 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useUserData } from '../screens/useUserData';
+import { ProtectedRoute } from "../components/ProtectedRoute";
 
+export function SettingsPage() {
+  return (
+    <ProtectedRoute>
+      <div>
+        <h1 className="text-2xl font-bold">Settings</h1>
+        <p>Only visible if logged in</p>
+      </div>
+    </ProtectedRoute>
+  );
+}
 interface Props {
   userId: string;
 }
 
-export function Settings({ userId }: Props) {
+export function Settings() {
   const { data, loading } = useUserData(userId);
 
   const [email, setEmail] = useState('');
@@ -159,3 +170,5 @@ export function Settings({ userId }: Props) {
     </div>
   );
 }
+// Route-compatible wrapper (no props required)
+// The Settings export above takes userId; this re-export works without it

@@ -56,3 +56,4 @@ export function ProtectedRoute({ children, userType }: ProtectedRouteProps) {
 
   return authorized ? <>{children}</> : <Navigate to="/login" />;
 }
+

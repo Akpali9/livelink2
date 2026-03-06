@@ -1,126 +1,126 @@
 import React from "react";
-import { Link, useNavigate } from "react-router";
+import { Link } from "react-router";
 import { motion } from "motion/react";
-import { Video as VideoIcon, Building, ArrowRight, ChevronRight, Shield } from "lucide-react";
+import { ArrowRight, Zap, Shield, Users } from "lucide-react";
 
 export function LoginPortal() {
-  const navigate = useNavigate();
-  
-  // Check if user is admin - you'll need to implement your own logic here
-  // This could come from context, props, or a hook
-  const isAdmin = true; // Replace with actual admin check
-
   return (
-    <div className="min-h-screen bg-white flex flex-col px-8 pt-20 pb-12 relative">
-      {/* Admin Link - Only visible to admin users */}
-      {isAdmin && (
+    <div className="flex flex-col min-h-screen bg-white text-[#1D1D1D]">
+      {/* Header */}
+      <div className="px-8 pt-12 pb-8 border-b-2 border-[#1D1D1D]">
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="absolute top-4 right-8 z-10"
+          className="inline-flex items-center gap-2 px-3 py-1 bg-[#1D1D1D] text-white text-[10px] font-bold uppercase tracking-widest mb-6 italic"
         >
-          <Link
-            to="/admin"
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1D1D1D] text-white text-xs font-bold uppercase tracking-wider italic rounded-sm hover:bg-[#389C9A] transition-colors"
-          >
-            <Shield className="w-3.5 h-3.5" />
-            <span>Admin</span>
-          </Link>
+          <span className="w-1.5 h-1.5 bg-[#FEDB71] rounded-none animate-pulse" />
+          LiveLink
         </motion.div>
-      )}
-
-      {/* Logo Section */}
-      <div className="flex flex-col items-center mb-16">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="flex items-center gap-2 mb-4"
-        >
-          <div className="w-10 h-10 bg-[#1D1D1D] flex items-center justify-center">
-            <div className="w-5 h-5 bg-[#389C9A]" />
-          </div>
-          <span className="text-3xl font-black uppercase tracking-tighter italic text-[#1D1D1D]">
-            LiveLink
-          </span>
-        </motion.div>
-      </div>
-
-      {/* Rest of your component remains the same... */}
-      {/* Heading Section */}
-      <div className="mb-12">
         <motion.h1
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-4xl font-black uppercase tracking-tighter leading-none mb-4 italic text-[#1D1D1D]"
+          className="text-4xl font-black uppercase tracking-tighter italic leading-tight mb-2"
         >
-          Who are you<br />logging in as?
+          Welcome Back
         </motion.h1>
-        <motion.p
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="text-[#1D1D1D]/40 text-sm font-bold uppercase tracking-widest italic"
-        >
-          Choose your account type to continue.
-        </motion.p>
-      </div>
-
-      {/* Portal Cards */}
-      <div className="flex flex-col gap-6 flex-1">
-        <motion.button
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.2 }}
-          onClick={() => navigate("/login/creator")}
-          className="group relative flex items-center justify-between p-8 bg-white border-2 border-[#1D1D1D] transition-all active:scale-[0.98] text-left hover:bg-[#1D1D1D] hover:text-white"
-        >
-          <div className="flex flex-col gap-4">
-            <VideoIcon className="w-8 h-8 text-[#389C9A]" />
-            <div>
-              <h3 className="text-xl font-black uppercase tracking-tight italic mb-1">I'm a Creator</h3>
-              <p className="text-xs font-medium italic opacity-60 leading-tight pr-8">
-                Access your campaigns, earnings and brand partnerships.
-              </p>
-            </div>
-          </div>
-          <ChevronRight className="w-6 h-6 transition-transform group-hover:translate-x-1" />
-        </motion.button>
-
-        <motion.button
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.3 }}
-          onClick={() => navigate("/login/business")}
-          className="group relative flex items-center justify-between p-8 bg-white border-2 border-[#1D1D1D] transition-all active:scale-[0.98] text-left hover:bg-[#1D1D1D] hover:text-white"
-        >
-          <div className="flex flex-col gap-4">
-            <Building className="w-8 h-8 text-[#FEDB71]" />
-            <div>
-              <h3 className="text-xl font-black uppercase tracking-tight italic mb-1">I'm a Business</h3>
-              <p className="text-xs font-medium italic opacity-60 leading-tight pr-8">
-                Manage your campaigns and find live creators for your brand.
-              </p>
-            </div>
-          </div>
-          <ChevronRight className="w-6 h-6 transition-transform group-hover:translate-x-1" />
-        </motion.button>
-      </div>
-
-      {/* Footer Links */}
-      <div className="mt-12 text-center">
-        <p className="text-[10px] font-black uppercase tracking-widest text-[#1D1D1D]/40 mb-4 italic">
-          New to LiveLink?
+        <p className="text-[#1D1D1D]/60 text-sm font-medium italic">
+          Select your account type to continue
         </p>
-        <div className="flex items-center justify-center gap-4 text-[11px] font-black uppercase tracking-widest italic">
-          <Link to="/become-creator" className="text-[#1D1D1D] hover:text-[#389C9A] transition-colors">Join as a Creator</Link>
-          <div className="w-[1px] h-3 bg-[#1D1D1D]/10" />
-          <Link to="/become-business" className="text-[#1D1D1D] hover:text-[#389C9A] transition-colors">Register a Business</Link>
+      </div>
+
+      <main className="flex-1 px-8 py-12 max-w-[480px] mx-auto w-full">
+        <div className="flex flex-col gap-4 mb-12">
+          {/* Creator Login */}
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.1 }}
+          >
+            <Link
+              to="/login/creator"
+              className="flex items-center justify-between bg-[#1D1D1D] text-white p-8 font-black uppercase tracking-tight italic hover:bg-[#389C9A] transition-all active:scale-[0.98] group"
+            >
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Zap className="w-4 h-4 text-[#FEDB71]" />
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-white/60">Creator</span>
+                </div>
+                <p className="text-xl">Sign In as Creator</p>
+              </div>
+              <ArrowRight className="w-6 h-6 text-[#389C9A] group-hover:text-[#FEDB71] transition-colors" />
+            </Link>
+          </motion.div>
+
+          {/* Business Login */}
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.2 }}
+          >
+            <Link
+              to="/login/business"
+              className="flex items-center justify-between border-2 border-[#1D1D1D] text-[#1D1D1D] p-8 font-black uppercase tracking-tight italic hover:bg-[#1D1D1D] hover:text-white transition-all active:scale-[0.98] group"
+            >
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Shield className="w-4 h-4 text-[#389C9A]" />
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-[#1D1D1D]/60">Business</span>
+                </div>
+                <p className="text-xl">Sign In as Business</p>
+              </div>
+              <ArrowRight className="w-6 h-6 text-[#1D1D1D] group-hover:text-[#FEDB71] transition-colors" />
+            </Link>
+          </motion.div>
         </div>
-        
-        <p className="mt-12 text-[8px] font-medium text-[#1D1D1D]/30 uppercase tracking-[0.2em] max-w-[200px] mx-auto leading-relaxed italic">
-          By continuing you agree to our Terms of Service and Privacy Policy
-        </p>
-      </div>
+
+        {/* Divider */}
+        <div className="flex items-center gap-4 mb-12">
+          <div className="h-[1px] flex-1 bg-[#1D1D1D]/10" />
+          <span className="text-[10px] font-black uppercase tracking-widest text-[#1D1D1D]/30 italic">New here?</span>
+          <div className="h-[1px] flex-1 bg-[#1D1D1D]/10" />
+        </div>
+
+        {/* Register options */}
+        <div className="flex flex-col gap-3">
+          <Link
+            to="/become-creator"
+            className="flex items-center justify-between border border-[#1D1D1D]/20 p-6 hover:border-[#389C9A] hover:bg-[#389C9A]/5 transition-all group"
+          >
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 bg-[#389C9A]/10 flex items-center justify-center">
+                <Zap className="w-5 h-5 text-[#389C9A]" />
+              </div>
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-widest mb-0.5">Become a Creator</p>
+                <p className="text-[9px] font-medium text-[#1D1D1D]/40 uppercase tracking-widest italic">Earn from your streams</p>
+              </div>
+            </div>
+            <ArrowRight className="w-4 h-4 text-[#1D1D1D]/30 group-hover:text-[#389C9A] transition-colors" />
+          </Link>
+
+          <Link
+            to="/become-business"
+            className="flex items-center justify-between border border-[#1D1D1D]/20 p-6 hover:border-[#FEDB71] hover:bg-[#FEDB71]/5 transition-all group"
+          >
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 bg-[#FEDB71]/10 flex items-center justify-center">
+                <Users className="w-5 h-5 text-[#1D1D1D]/60" />
+              </div>
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-widest mb-0.5">Register Business</p>
+                <p className="text-[9px] font-medium text-[#1D1D1D]/40 uppercase tracking-widest italic">Sponsor live streamers</p>
+              </div>
+            </div>
+            <ArrowRight className="w-4 h-4 text-[#1D1D1D]/30 group-hover:text-[#1D1D1D] transition-colors" />
+          </Link>
+        </div>
+
+        <div className="mt-12 text-center">
+          <Link to="/" className="text-[10px] font-black uppercase tracking-widest text-[#1D1D1D]/30 hover:text-[#1D1D1D] transition-colors italic">
+            ← Back to Home
+          </Link>
+        </div>
+      </main>
     </div>
   );
 }
