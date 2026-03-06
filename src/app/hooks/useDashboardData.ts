@@ -1,178 +1,324 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { toast } from 'sonner';
-import type { 
-  UserProfile, 
-  StatusCounts, 
-  IncomingRequest, 
-  LiveCampaign, 
-  Application, 
-  UpcomingCampaign 
-} from '../types/dashboard';
+import type { IncomingRequest } from '../types/dashboard';
+
+interface DashboardProfile {
+  id: string;
+  total_earned: number;
+  pending: number;
+  paid_out: number;
+  full_name?: string;
+  avatar_url?: string;
+}
+
+interface StatusCounts {
+  requested: number;
+  pending: number;
+  completed: number;
+}
+
+interface LiveCampaign {
+  id: string;
+  business: string;
+  name: string;
+  logo: string;
+  session_earnings: number;
+  stream_time: string;
+  progress: number;
+  remaining_mins: number;
+}
+
+interface Application {
+  id: string;
+  business: string;
+  type: string;
+  logo: string;
+  amount?: number;
+  status: string;
+  applied_at: string;
+}
+
+interface UpcomingCampaign {
+  id: string;
+  business: string;
+  logo: string;
+  start_date: string;
+  package: string;
+}
+
+interface DashboardErrors {
+  profile?: string;
+  counts?: string;
+  requests?: string;
+  live?: string;
+  applications?: string;
+  upcoming?: string;
+}
 
 export function useDashboardData(creatorId: string | null) {
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [statusCounts, setStatusCounts] = useState<StatusCounts | null>(null);
+  const [profile, setProfile] = useState<DashboardProfile | null>(null);
+  const [statusCounts, setStatusCounts] = useState<StatusCounts>({ requested: 0, pending: 0, completed: 0 });
   const [incomingRequests, setIncomingRequests] = useState<IncomingRequest[]>([]);
   const [liveCampaign, setLiveCampaign] = useState<LiveCampaign | null>(null);
   const [applications, setApplications] = useState<Application[]>([]);
   const [upcomingCampaigns, setUpcomingCampaigns] = useState<UpcomingCampaign[]>([]);
   const [loading, setLoading] = useState(true);
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<DashboardErrors>({});
 
-  const fetchAll = async () => {
+  const fetchAll = useCallback(async () => {
     if (!creatorId) {
       setLoading(false);
       return;
     }
-    
+
     setLoading(true);
-    setErrors({});
+    const newErrors: DashboardErrors = {};
 
-    const newErrors: Record<string, string> = {};
-
+    // 1. Fetch profile (earnings)
     try {
-      // 1. Profile & earnings
-      const { data: profileData, error: profileErr } = await supabase
-        .from("creator_profiles")
-        .select("*")
-        .eq("id", creatorId)
+      const { data: profileData, error } = await supabase
+        .from('profiles')
+        .select('id, total_earned, pending, paid_out, full_name, avatar_url')
+        .eq('id', creatorId)
         .single();
 
-      if (profileErr) {
-        console.error('Profile error:', profileErr);
-        newErrors.profile = "Could not load profile";
-      } else {
-        setProfile(profileData);
+      if (error) throw error;
+      if (profileData) setProfile(profileData);
+    } catch {
+      newErrors.profile = 'Could not load earnings';
+    }
+
+    // 2. Fetch campaign status counts
+    try {
+      // Get creator record first
+      const { data: creatorRecord } = await supabase
+        .from('creators')
+        .select('id')
+        .eq('user_id', creatorId)
+        .single();
+
+      if (creatorRecord) {
+        const { data: campaignCreators } = await supabase
+          .from('campaign_creators')
+          .select('status, campaign_id')
+          .eq('creator_id', creatorRecord.id);
+
+        const counts = {
+          requested: 0,
+          pending: campaignCreators?.filter(c => c.status === 'NOT STARTED').length ?? 0,
+          completed: campaignCreators?.filter(c => c.status === 'COMPLETED').length ?? 0,
+        };
+
+        // Count pending campaign_requests
+        const { count } = await supabase
+          .from('campaign_requests')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'pending')
+          .gt('expires_at', new Date().toISOString());
+
+        counts.requested = count ?? 0;
+        setStatusCounts(counts);
       }
+    } catch {
+      newErrors.counts = 'Could not load campaign counts';
+    }
 
-      // 2. Status counts
-      const { data: countsData, error: countsErr } = await supabase
-        .from("campaign_status_counts")
-        .select("requested, pending, completed")
-        .eq("creator_id", creatorId)
-        .maybeSingle();
+    // 3. Fetch incoming requests (real-time)
+    try {
+      const { data: creatorRecord } = await supabase
+        .from('creators')
+        .select('id')
+        .eq('user_id', creatorId)
+        .single();
 
-      if (!countsErr && countsData) {
-        setStatusCounts(countsData);
-      } else {
-        setStatusCounts({ requested: 0, pending: 0, completed: 0 });
+      if (creatorRecord) {
+        const { data: reqData, error } = await supabase
+          .from('campaign_requests')
+          .select('*')
+          .eq('creator_id', creatorRecord.id)
+          .eq('status', 'pending')
+          .gt('expires_at', new Date().toISOString())
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        const requests: IncomingRequest[] = (reqData ?? []).map((r: any) => ({
+          id: r.id,
+          business: r.business_name ?? 'Unknown Business',
+          logo: r.logo ?? '',
+          name: r.campaign_name ?? 'Campaign',
+          type: r.campaign_type ?? 'Banner',
+          price: r.price ?? 0,
+          streams: r.streams ?? 4,
+          days_left: Math.max(0, Math.floor(
+            (new Date(r.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+          )),
+        }));
+
+        setIncomingRequests(requests);
       }
+    } catch {
+      newErrors.requests = 'Could not load incoming requests';
+    }
 
-      // 3. Incoming requests
-      const { data: reqData, error: reqErr } = await supabase
-        .from("campaign_requests")
-        .select("*")
-        .eq("creator_id", creatorId)
-        .eq("status", "pending")
-        .order("days_left", { ascending: true });
+    // 4. Fetch live campaign
+    try {
+      const { data: creatorRecord } = await supabase
+        .from('creators')
+        .select('id')
+        .eq('user_id', creatorId)
+        .single();
 
-      if (!reqErr) {
-        setIncomingRequests(reqData ?? []);
-      } else {
-        console.error('Requests error:', reqErr);
-        newErrors.requests = "Could not load incoming requests";
+      if (creatorRecord) {
+        const { data: liveStream } = await supabase
+          .from('campaign_streams')
+          .select(`
+            *,
+            campaign_creator:campaign_creator_id (
+              creator_id,
+              campaign:campaign_id (
+                name,
+                image,
+                businesses (name, logo)
+              )
+            )
+          `)
+          .eq('status', 'LIVE')
+          .eq('campaign_creator.creator_id', creatorRecord.id)
+          .single();
+
+        if (liveStream) {
+          const camp = liveStream.campaign_creator?.campaign;
+          const biz = camp?.businesses;
+          setLiveCampaign({
+            id: liveStream.id,
+            business: biz?.name ?? 'Business',
+            name: camp?.name ?? 'Campaign',
+            logo: biz?.logo ?? camp?.image ?? '',
+            session_earnings: liveStream.session_earnings ?? 0,
+            stream_time: liveStream.stream_time ?? '0:00',
+            progress: liveStream.progress ?? 0,
+            remaining_mins: liveStream.remaining_mins ?? 60,
+          });
+        } else {
+          setLiveCampaign(null);
+        }
       }
+    } catch {
+      // No live campaign is fine, not an error
+      setLiveCampaign(null);
+    }
 
-      // 4. Live campaign
-      const { data: liveData, error: liveErr } = await supabase
-        .from("live_campaigns")
-        .select("*")
-        .eq("creator_id", creatorId)
-        .eq("is_live", true)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+    // 5. Fetch applications to business campaigns
+    try {
+      const { data: appData, error } = await supabase
+        .from('applications')
+        .select(`
+          id, status, created_at,
+          campaign:campaign_id (
+            name, logo, partnership_type, pay_rate
+          )
+        `)
+        .eq('user_id', creatorId)
+        .order('created_at', { ascending: false });
 
-      if (!liveErr) {
-        setLiveCampaign(liveData);
+      if (error) throw error;
+
+      const apps: Application[] = (appData ?? []).map((a: any) => ({
+        id: a.id,
+        business: a.campaign?.name ?? 'Campaign',
+        type: a.campaign?.partnership_type ?? 'Partnership',
+        logo: a.campaign?.logo ?? '',
+        status: a.status,
+        applied_at: a.created_at,
+      }));
+
+      setApplications(apps);
+    } catch {
+      newErrors.applications = 'Could not load applications';
+    }
+
+    // 6. Fetch upcoming campaigns
+    try {
+      const { data: creatorRecord } = await supabase
+        .from('creators')
+        .select('id')
+        .eq('user_id', creatorId)
+        .single();
+
+      if (creatorRecord) {
+        const { data: upcoming, error } = await supabase
+          .from('campaign_streams')
+          .select(`
+            id, stream_date, status,
+            campaign_creator:campaign_creator_id (
+              creator_id,
+              campaign:campaign_id (
+                name, image, type,
+                businesses (name, logo)
+              )
+            )
+          `)
+          .eq('status', 'UPCOMING')
+          .eq('campaign_creator.creator_id', creatorRecord.id)
+          .order('stream_date', { ascending: true })
+          .limit(5);
+
+        if (error) throw error;
+
+        const upcomingList: UpcomingCampaign[] = (upcoming ?? []).map((s: any) => {
+          const camp = s.campaign_creator?.campaign;
+          const biz = camp?.businesses;
+          return {
+            id: s.id,
+            business: biz?.name ?? camp?.name ?? 'Campaign',
+            logo: biz?.logo ?? camp?.image ?? '',
+            start_date: s.stream_date ?? new Date().toISOString(),
+            package: camp?.type ?? 'Banner',
+          };
+        });
+
+        setUpcomingCampaigns(upcomingList);
       }
-
-      // 5. Applications
-      const { data: appData, error: appErr } = await supabase
-        .from("creator_applications")
-        .select("*")
-        .eq("creator_id", creatorId)
-        .order("applied_at", { ascending: false });
-
-      if (!appErr) {
-        setApplications(appData ?? []);
-      } else {
-        console.error('Applications error:', appErr);
-        newErrors.applications = "Could not load applications";
-      }
-
-      // 6. Upcoming campaigns
-      const { data: upData, error: upErr } = await supabase
-        .from("upcoming_campaigns")
-        .select("*")
-        .eq("creator_id", creatorId)
-        .gt("start_date", new Date().toISOString())
-        .order("start_date", { ascending: true });
-
-      if (!upErr) {
-        setUpcomingCampaigns(upData ?? []);
-      } else {
-        console.error('Upcoming error:', upErr);
-        newErrors.upcoming = "Could not load upcoming campaigns";
-      }
-
-    } catch (error) {
-      console.error('Error fetching dashboard data:', error);
-      newErrors.general = "Failed to load dashboard data";
+    } catch {
+      newErrors.upcoming = 'Could not load upcoming campaigns';
     }
 
     setErrors(newErrors);
     setLoading(false);
-  };
+  }, [creatorId]);
 
   useEffect(() => {
     fetchAll();
-  }, [creatorId]);
 
-  // Real-time subscriptions
-  useEffect(() => {
     if (!creatorId) return;
 
-    const requestsSub = supabase
-      .channel('dashboard-requests')
+    // Subscribe to real-time campaign request updates
+    const channel = supabase
+      .channel('dashboard-realtime-' + creatorId)
       .on(
         'postgres_changes',
-        { 
-          event: '*', 
-          schema: 'public', 
-          table: 'campaign_requests', 
-          filter: `creator_id=eq.${creatorId}` 
-        },
+        { event: '*', schema: 'public', table: 'campaign_requests' },
+        () => fetchAll()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'campaign_streams' },
+        () => fetchAll()
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${creatorId}` },
         (payload) => {
-          console.log('Request update:', payload);
-          fetchAll();
-          if (payload.eventType === 'INSERT') {
-            toast.info('New campaign request received!');
+          if (payload.new) {
+            setProfile(payload.new as DashboardProfile);
           }
         }
       )
       .subscribe();
 
-    const liveSub = supabase
-      .channel('dashboard-live')
-      .on(
-        'postgres_changes',
-        { 
-          event: '*', 
-          schema: 'public', 
-          table: 'live_campaigns', 
-          filter: `creator_id=eq.${creatorId}` 
-        },
-        () => fetchAll()
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(requestsSub);
-      supabase.removeChannel(liveSub);
-    };
-  }, [creatorId]);
+    return () => supabase.removeChannel(channel);
+  }, [creatorId, fetchAll]);
 
   return {
     profile,
