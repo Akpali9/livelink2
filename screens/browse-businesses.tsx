@@ -6,10 +6,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { useNavigate } from "react-router";
 import { createClient } from "@supabase/supabase-js";
 import { BottomNav } from "../components/bottom-nav";
-
-const supabaseUrl = "https://bcteuanlownbanppggew.supabase.co";
-const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJjdGV1YW5sb3duYmFucHBnZ2V3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIxMDM4MDcsImV4cCI6MjA4NzY3OTgwN30.YW2O1MvkRkpB8ezedFdvwrWHymiXiHcrU5DGj1mmcg4";
-const supabase = createClient(supabaseUrl, supabaseKey);
+import { supabase } from "../lib/supabase";
 
 type PartnershipType = "Pay + Code" | "Paying" | "Code Only" | "Open to Offers";
 
