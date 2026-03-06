@@ -1,0 +1,75 @@
+import { useEffect, useState, useCallback, useRef } from 'react'
+import { supabase } from '../lib/supabase'
+import type { Message } from '../types/database'
+import { useAuth } from '../contexts/AuthContext'
+
+export function useMessages(campaignId: string) {
+  const { user } = useAuth()
+  const [messages, setMessages] = useState<Message[]>([])
+  const [loading, setLoading] = useState(true)
+  const [sending, setSending] = useState(false)
+  const bottomRef = useRef<HTMLDivElement>(null)
+
+  const scrollToBottom = () => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }
+
+  const fetchMessages = useCallback(async () => {
+    if (!campaignId) return
+    const { data } = await supabase
+      .from('messages')
+      .select('*, sender:profiles!messages_sender_id_fkey(*)')
+      .eq('campaign_id', campaignId)
+      .order('created_at', { ascending: true })
+    if (data) setMessages(data as Message[])
+    setLoading(false)
+  }, [campaignId])
+
+  const sendMessage = async (content: string, recipientId: string) => {
+    if (!user || !content.trim()) return
+    setSending(true)
+    const { error } = await supabase.from('messages').insert({
+      campaign_id: campaignId,
+      sender_id: user.id,
+      recipient_id: recipientId,
+      content: content.trim(),
+      status: 'sent',
+    })
+    setSending(false)
+    if (error) throw error
+  }
+
+  useEffect(() => {
+    if (!campaignId) return
+    fetchMessages()
+
+    const channel = supabase
+      .channel(`messages:${campaignId}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages',
+        filter: `campaign_id=eq.${campaignId}`,
+      }, async (payload) => {
+        // Fetch with sender join
+        const { data } = await supabase
+          .from('messages')
+          .select('*, sender:profiles!messages_sender_id_fkey(*)')
+          .eq('id', (payload.new as Message).id)
+          .single()
+        if (data) {
+          setMessages(prev => [...prev, data as Message])
+          setTimeout(scrollToBottom, 100)
+        }
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [campaignId, fetchMessages])
+
+  useEffect(() => {
+    scrollToBottom()
+  }, [messages])
+
+  return { messages, loading, sending, sendMessage, bottomRef }
+}
