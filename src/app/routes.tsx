@@ -36,6 +36,7 @@ import { RootLayout } from "./components/layout";
 import { CampaignDetails } from "./screens/campaign-details";
 import { Settings } from "./screens/settings";
 import { BusinessSettings } from "./screens/business-settings";
+import { AdminDashboard } from "./screens/admin-dashboard";
 import { supabase } from "./lib/supabase";
 
 // Authentication loader functions
@@ -81,6 +82,7 @@ async function requireBusiness() {
   return null;
 }
 
+// Single declaration of requireAdmin
 async function requireAdmin() {
   const { data: { session } } = await supabase.auth.getSession();
   
@@ -127,7 +129,7 @@ async function loadUser() {
     const { data: profile } = await supabase
       .from('creator_profiles')
       .select('*')
-      .eq('id', session.user.id)
+      .eq('user_id', session.user.id)
       .single();
       
     return { user: session.user, profile, userType };
@@ -135,7 +137,7 @@ async function loadUser() {
     const { data: profile } = await supabase
       .from('business_profiles')
       .select('*')
-      .eq('id', session.user.id)
+      .eq('user_id', session.user.id)
       .single();
       
     return { user: session.user, profile, userType };
@@ -342,54 +344,25 @@ const routes: RouteObject[] = [
         loader: requireBusiness // Only businesses can access business settings
       },
       
-      // Admin protected routes
-      { 
-        path: "admin/applications", 
-        Component: AdminApplicationQueue,
-        loader: requireAdmin 
+      // Admin routes
+      {
+        path: "admin",
+        loader: requireAdmin,
+        children: [
+          { 
+            index: true, 
+            Component: AdminDashboard,
+            loader: requireAdmin 
+          },
+          { 
+            path: "applications", 
+            Component: AdminApplicationQueue,
+            loader: requireAdmin 
+          }
+        ]
       },
     ],
   },
 ];
-import { AdminDashboard } from "./screens/admin-dashboard";
-
-// Add this loader function
-async function requireAdmin() {
-  const { data: { session } } = await supabase.auth.getSession();
-  
-  if (!session) {
-    return redirect("/login/portal");
-  }
-  
-  // Check if user is admin
-  const { data: adminProfile } = await supabase
-    .from('admin_profiles')
-    .select('*')
-    .eq('id', session.user.id)
-    .single();
-  
-  if (!adminProfile) {
-    return redirect("/");
-  }
-  
-  return null;
-}
-
-// Add this to your routes array
-{
-  path: "admin",
-  children: [
-    { 
-      index: true, 
-      Component: AdminDashboard,
-      loader: requireAdmin 
-    },
-    { 
-      path: "applications", 
-      Component: AdminApplicationQueue,
-      loader: requireAdmin 
-    }
-  ]
-}
 
 export const router = createBrowserRouter(routes);
